@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { PlusCircle, Trash2, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { RecipeHistory } from './recipe-history';
 
 type Ingredient = {
   id: number;
@@ -16,6 +17,15 @@ type Ingredient = {
   packagePrice: string;
   packageQuantity: string;
   usedQuantity: string;
+};
+
+export type Recipe = {
+  id: string;
+  name: string;
+  producedUnits: string;
+  ingredients: Omit<Ingredient, 'id'>[];
+  totalCost: number;
+  costPerUnit: number;
 };
 
 // Function to format numbers as BRL currency
@@ -31,6 +41,7 @@ const formatCurrency = (value: number) => {
 
 export function RecipeCalculator() {
   const { toast } = useToast();
+
   const [recipeName, setRecipeName] = useState('');
   const [producedUnits, setProducedUnits] = useState('');
   const [nextId, setNextId] = useState(2);
@@ -38,11 +49,46 @@ export function RecipeCalculator() {
     { id: 1, name: '', packagePrice: '', packageQuantity: '', usedQuantity: '' },
   ]);
 
+  const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
+  const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
+
   const [totalCost, setTotalCost] = useState(0);
   const [costPerUnit, setCostPerUnit] = useState(0);
 
   const [pulseTotal, setPulseTotal] = useState(false);
   const [pulseUnit, setPulseUnit] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('custo-doce-recipes');
+      if (saved) {
+        setSavedRecipes(JSON.parse(saved));
+      }
+    } catch (error) {
+      console.error("Failed to load recipes from localStorage", error);
+      toast({
+        title: "Erro ao carregar receitas",
+        description: "Não foi possível carregar as receitas salvas.",
+        variant: "destructive",
+      });
+      setSavedRecipes([]);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+        try {
+            localStorage.setItem('custo-doce-recipes', JSON.stringify(savedRecipes));
+        } catch (error) {
+            console.error("Failed to save recipes to localStorage", error);
+            toast({
+                title: "Erro ao salvar receitas",
+                description: "Não foi possível salvar as receitas no seu navegador.",
+                variant: "destructive",
+            });
+        }
+    }
+  }, [savedRecipes, toast]);
 
 
   const calculateIngredientCost = (ingredient: Ingredient) => {
@@ -89,10 +135,10 @@ export function RecipeCalculator() {
 
 
   const addIngredient = () => {
-    if (ingredients.length >= 10) {
+    if (ingredients.length >= 20) {
       toast({
         title: "Limite Atingido",
-        description: "Você pode adicionar no máximo 10 ingredientes.",
+        description: "Você pode adicionar no máximo 20 ingredientes.",
         variant: "destructive",
       });
       return;
@@ -116,6 +162,18 @@ export function RecipeCalculator() {
     setIngredients(ingredients.map(ing => (ing.id === id ? { ...ing, [field]: value } : ing)));
   };
   
+  const handleClearForm = () => {
+    setRecipeName('');
+    setProducedUnits('');
+    setIngredients([{ id: 1, name: '', packagePrice: '', packageQuantity: '', usedQuantity: '' }]);
+    setNextId(2);
+    setEditingRecipeId(null);
+     toast({
+        title: "Formulário Limpo",
+        description: "Você está criando uma nova receita.",
+    });
+  };
+
   const handleSaveRecipe = () => {
     if (!recipeName.trim()) {
         toast({
@@ -126,22 +184,81 @@ export function RecipeCalculator() {
         return;
     }
 
-    console.log("Saving recipe:", {
-        recipeName,
+    const ingredientsToSave = ingredients.map(({ id, ...rest }) => rest);
+    const hasAtLeastOneIngredient = ingredientsToSave.some(ing => ing.name.trim() !== '');
+    if (!hasAtLeastOneIngredient) {
+        toast({
+            title: "Ingredientes Faltando",
+            description: "Adicione pelo menos um ingrediente à sua receita.",
+            variant: "destructive",
+        });
+        return;
+    }
+
+    if (editingRecipeId) {
+      setSavedRecipes(prev => prev.map(recipe => 
+        recipe.id === editingRecipeId 
+        ? {
+            ...recipe,
+            name: recipeName,
+            producedUnits,
+            ingredients: ingredientsToSave,
+            totalCost: memoizedTotalCost,
+            costPerUnit: memoizedCostPerUnit,
+          }
+        : recipe
+      ));
+      toast({
+        title: "Receita Atualizada!",
+        description: `A receita "${recipeName}" foi atualizada com sucesso.`,
+      });
+    } else {
+      const newRecipe: Recipe = {
+        id: `${Date.now()}-${Math.random()}`,
+        name: recipeName,
         producedUnits,
-        ingredients,
-        totalCost,
-        costPerUnit,
-    });
-    
+        ingredients: ingredientsToSave,
+        totalCost: memoizedTotalCost,
+        costPerUnit: memoizedCostPerUnit,
+      };
+      setSavedRecipes(prev => [newRecipe, ...prev]);
+      toast({
+          title: "Receita Salva!",
+          description: `A receita "${recipeName}" foi salva com sucesso.`,
+      });
+    }
+
+    handleClearForm();
+  };
+
+  const handleSelectRecipeToEdit = (recipe: Recipe) => {
+    setRecipeName(recipe.name);
+    setProducedUnits(recipe.producedUnits);
+    let currentId = 1;
+    const ingredientsWithId = recipe.ingredients.map(ing => ({...ing, id: currentId++}));
+    setIngredients(ingredientsWithId.length > 0 ? ingredientsWithId : [{id: 1, name: '', packagePrice: '', packageQuantity: '', usedQuantity: ''}]);
+    setNextId(currentId || 2);
+    setEditingRecipeId(recipe.id);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
     toast({
-        title: "Receita Salva!",
-        description: `A receita "${recipeName}" está pronta para ser salva no banco de dados.`,
+        title: "Editando Receita",
+        description: `Você está editando a receita "${recipe.name}".`,
+    });
+  };
+
+  const handleDeleteRecipe = (idToDelete: string) => {
+    setSavedRecipes(prev => prev.filter(recipe => recipe.id !== idToDelete));
+    if (editingRecipeId === idToDelete) {
+        handleClearForm();
+    }
+    toast({
+        title: "Receita Deletada",
+        description: "A receita foi removida do seu histórico.",
     });
   };
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-8 max-w-6xl mx-auto">
       <header className="text-center">
         <h1 className="text-4xl font-bold text-primary font-headline tracking-tight">Custo Doce</h1>
         <p className="text-muted-foreground mt-2">Sua calculadora de custo de receitas para confeitaria.</p>
@@ -150,7 +267,12 @@ export function RecipeCalculator() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         <Card className="lg:col-span-2 shadow-sm">
           <CardHeader>
-            <CardTitle>Detalhes da Receita</CardTitle>
+            <CardTitle>{editingRecipeId ? `Editando: ${recipeName}` : 'Nova Receita'}</CardTitle>
+            <CardDescription>
+                {editingRecipeId 
+                    ? "Altere os detalhes abaixo e clique em 'Atualizar Receita' para salvar." 
+                    : "Preencha os detalhes da sua nova receita."}
+            </CardDescription>
           </CardHeader>
           <CardContent className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -190,7 +312,7 @@ export function RecipeCalculator() {
                 </div>
                 <div className="flex justify-between items-center p-4 bg-secondary/30 rounded-lg">
                     <span className="text-muted-foreground">Custo/Unid.</span>
-                    <span className={cn("text-2xl font-bold text-accent-foreground transition-transform duration-500", pulseUnit && "scale-110", (!producedUnits || parseFloat(producedUnits) === 0) && "opacity-50")}>
+                    <span className={cn("text-2xl font-bold text-accent-foreground transition-transform duration-500", pulseUnit && "scale-110", (!producedUnits || parseFloat(producedUnits.replace(',', '.')) === 0) && "opacity-50")}>
                         {formatCurrency(costPerUnit)}
                     </span>
                 </div>
@@ -198,7 +320,7 @@ export function RecipeCalculator() {
             <CardFooter>
                  <Button onClick={handleSaveRecipe} className="w-full bg-accent text-accent-foreground hover:bg-accent/90">
                     <Save className="mr-2 h-4 w-4" />
-                    Salvar Receita
+                    {editingRecipeId ? 'Atualizar Receita' : 'Salvar Receita'}
                 </Button>
             </CardFooter>
         </Card>
@@ -208,7 +330,7 @@ export function RecipeCalculator() {
         <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-4">
           <div className="space-y-1">
             <CardTitle>Ingredientes</CardTitle>
-            <CardDescription>Adicione até 10 ingredientes para sua receita.</CardDescription>
+            <CardDescription>Adicione até 20 ingredientes para sua receita.</CardDescription>
           </div>
           <Button onClick={addIngredient} size="sm">
             <PlusCircle className="mr-2 h-4 w-4" />
@@ -284,6 +406,15 @@ export function RecipeCalculator() {
           </div>
         </CardContent>
       </Card>
+
+      <RecipeHistory 
+        recipes={savedRecipes} 
+        onEdit={handleSelectRecipeToEdit} 
+        onDelete={handleDeleteRecipe} 
+        onNew={handleClearForm}
+        currentEditingId={editingRecipeId}
+      />
+
     </div>
   );
 }
