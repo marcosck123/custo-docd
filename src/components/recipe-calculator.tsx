@@ -10,8 +10,12 @@ import { PlusCircle, Trash2, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { RecipeHistory } from './recipe-history';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection, doc, serverTimestamp } from 'firebase/firestore';
+import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 
-type Ingredient = {
+
+type IngredientState = {
   id: number;
   name: string;
   packagePrice: string;
@@ -19,14 +23,19 @@ type Ingredient = {
   usedQuantity: string;
 };
 
+// Shape of the data we send TO firestore
+type IngredientData = Omit<IngredientState, 'id'>;
+
 export type Recipe = {
-  id: string;
+  id: string; // from firestore
   name: string;
   producedUnits: string;
-  ingredients: Omit<Ingredient, 'id'>[];
+  ingredients: IngredientData[];
   totalCost: number;
   costPerUnit: number;
+  createdAt?: any; // Firestore Timestamp
 };
+
 
 // Function to format numbers as BRL currency
 const formatCurrency = (value: number) => {
@@ -41,15 +50,15 @@ const formatCurrency = (value: number) => {
 
 export function RecipeCalculator() {
   const { toast } = useToast();
+  const firestore = useFirestore();
 
   const [recipeName, setRecipeName] = useState('');
   const [producedUnits, setProducedUnits] = useState('');
   const [nextId, setNextId] = useState(2);
-  const [ingredients, setIngredients] = useState<Ingredient[]>([
+  const [ingredients, setIngredients] = useState<IngredientState[]>([
     { id: 1, name: '', packagePrice: '', packageQuantity: '', usedQuantity: '' },
   ]);
 
-  const [savedRecipes, setSavedRecipes] = useState<Recipe[]>([]);
   const [editingRecipeId, setEditingRecipeId] = useState<string | null>(null);
 
   const [totalCost, setTotalCost] = useState(0);
@@ -58,40 +67,11 @@ export function RecipeCalculator() {
   const [pulseTotal, setPulseTotal] = useState(false);
   const [pulseUnit, setPulseUnit] = useState(false);
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('custo-doce-recipes');
-      if (saved) {
-        setSavedRecipes(JSON.parse(saved));
-      }
-    } catch (error) {
-      console.error("Failed to load recipes from localStorage", error);
-      toast({
-        title: "Erro ao carregar receitas",
-        description: "Não foi possível carregar as receitas salvas.",
-        variant: "destructive",
-      });
-      setSavedRecipes([]);
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-        try {
-            localStorage.setItem('custo-doce-recipes', JSON.stringify(savedRecipes));
-        } catch (error) {
-            console.error("Failed to save recipes to localStorage", error);
-            toast({
-                title: "Erro ao salvar receitas",
-                description: "Não foi possível salvar as receitas no seu navegador.",
-                variant: "destructive",
-            });
-        }
-    }
-  }, [savedRecipes, toast]);
+  const recipesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'receitas') : null, [firestore]);
+  const { data: savedRecipes, isLoading: recipesLoading } = useCollection<Recipe>(recipesQuery);
 
 
-  const calculateIngredientCost = (ingredient: Ingredient) => {
+  const calculateIngredientCost = (ingredient: IngredientState) => {
     const price = parseFloat(ingredient.packagePrice.replace(',', '.')) || 0;
     const totalQty = parseFloat(ingredient.packageQuantity.replace(',', '.')) || 0;
     const usedQty = parseFloat(ingredient.usedQuantity.replace(',', '.')) || 0;
@@ -158,7 +138,7 @@ export function RecipeCalculator() {
     }
   };
 
-  const handleIngredientChange = (id: number, field: keyof Ingredient, value: string) => {
+  const handleIngredientChange = (id: number, field: keyof IngredientState, value: string) => {
     setIngredients(ingredients.map(ing => (ing.id === id ? { ...ing, [field]: value } : ing)));
   };
   
@@ -175,6 +155,10 @@ export function RecipeCalculator() {
   };
 
   const handleSaveRecipe = () => {
+    if (!firestore) {
+        toast({ title: "Erro", description: "O banco de dados não está pronto.", variant: "destructive" });
+        return;
+    }
     if (!recipeName.trim()) {
         toast({
             title: "Nome da Receita Faltando",
@@ -195,33 +179,28 @@ export function RecipeCalculator() {
         return;
     }
 
-    if (editingRecipeId) {
-      setSavedRecipes(prev => prev.map(recipe => 
-        recipe.id === editingRecipeId 
-        ? {
-            ...recipe,
-            name: recipeName,
-            producedUnits,
-            ingredients: ingredientsToSave,
-            totalCost: memoizedTotalCost,
-            costPerUnit: memoizedCostPerUnit,
-          }
-        : recipe
-      ));
-      toast({
-        title: "Receita Atualizada!",
-        description: `A receita "${recipeName}" foi atualizada com sucesso.`,
-      });
-    } else {
-      const newRecipe: Recipe = {
-        id: `${Date.now()}-${Math.random()}`,
+    const recipeData = {
         name: recipeName,
         producedUnits,
         ingredients: ingredientsToSave,
         totalCost: memoizedTotalCost,
         costPerUnit: memoizedCostPerUnit,
+    };
+
+    if (editingRecipeId) {
+      const docRef = doc(firestore, "receitas", editingRecipeId);
+      updateDocumentNonBlocking(docRef, recipeData);
+      toast({
+        title: "Receita Atualizada!",
+        description: `A receita "${recipeName}" foi atualizada com sucesso.`,
+      });
+    } else {
+      const newRecipe = {
+        ...recipeData,
+        createdAt: serverTimestamp(),
       };
-      setSavedRecipes(prev => [newRecipe, ...prev]);
+      const collectionRef = collection(firestore, "receitas");
+      addDocumentNonBlocking(collectionRef, newRecipe);
       toast({
           title: "Receita Salva!",
           description: `A receita "${recipeName}" foi salva com sucesso.`,
@@ -247,7 +226,10 @@ export function RecipeCalculator() {
   };
 
   const handleDeleteRecipe = (idToDelete: string) => {
-    setSavedRecipes(prev => prev.filter(recipe => recipe.id !== idToDelete));
+    if (!firestore) return;
+    const docRef = doc(firestore, "receitas", idToDelete);
+    deleteDocumentNonBlocking(docRef);
+
     if (editingRecipeId === idToDelete) {
         handleClearForm();
     }
@@ -408,7 +390,8 @@ export function RecipeCalculator() {
       </Card>
 
       <RecipeHistory 
-        recipes={savedRecipes} 
+        recipes={savedRecipes || []}
+        isLoading={recipesLoading}
         onEdit={handleSelectRecipeToEdit} 
         onDelete={handleDeleteRecipe} 
         onNew={handleClearForm}
