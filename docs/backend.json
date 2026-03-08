@@ -1,0 +1,123 @@
+{
+  "entities": {
+    "Recipe": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Recipe",
+      "type": "object",
+      "description": "Represents a culinary recipe, detailing its name, creation date, and aggregated cost information. It references individual ingredient entities.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Recipe entity."
+        },
+        "recipeName": {
+          "type": "string",
+          "description": "The name given to the recipe."
+        },
+        "creationDate": {
+          "type": "string",
+          "description": "The date and time when the recipe was first created.",
+          "format": "date-time"
+        },
+        "ingredientIds": {
+          "type": "array",
+          "description": "References to Ingredient entities associated with this recipe. (Relationship: Recipe 1:N Ingredient)",
+          "items": {
+            "type": "string"
+          }
+        },
+        "totalCost": {
+          "type": "number",
+          "description": "The total calculated cost of all ingredients combined in the recipe."
+        },
+        "producedQuantity": {
+          "type": "number",
+          "description": "The optional total quantity of units produced from this recipe, used for unit cost calculation."
+        },
+        "costPerUnit": {
+          "type": "number",
+          "description": "The optional calculated cost per unit of the finished product, derived from total cost and produced quantity."
+        }
+      },
+      "required": [
+        "id",
+        "recipeName",
+        "creationDate",
+        "ingredientIds",
+        "totalCost"
+      ]
+    },
+    "Ingredient": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Ingredient",
+      "type": "object",
+      "description": "Represents a single ingredient used in a specific recipe, including its package details, used quantity, and calculated cost.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Ingredient entity."
+        },
+        "recipeId": {
+          "type": "string",
+          "description": "Reference to the Recipe this ingredient belongs to. (Relationship: Recipe 1:N Ingredient)"
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the ingredient (e.g., 'Farinha')."
+        },
+        "packagePrice": {
+          "type": "number",
+          "description": "The total price of the package containing this ingredient (e.g., R$10.00)."
+        },
+        "packageQuantity": {
+          "type": "number",
+          "description": "The total quantity of the ingredient contained in its package (e.g., 1000 for 1kg in grams)."
+        },
+        "usedQuantity": {
+          "type": "number",
+          "description": "The quantity of this specific ingredient used in the recipe (e.g., 200g)."
+        },
+        "cost": {
+          "type": "number",
+          "description": "The calculated cost of the portion of this ingredient used in the recipe."
+        }
+      },
+      "required": [
+        "id",
+        "recipeId",
+        "name",
+        "packagePrice",
+        "packageQuantity",
+        "usedQuantity",
+        "cost"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/receitas/{recipeId}",
+        "definition": {
+          "entityName": "Recipe",
+          "schema": {
+            "$ref": "#/backend/entities/Recipe"
+          },
+          "description": "Stores individual recipe documents. Each document contains fields such as 'nomeReceita', 'dataCriacao', 'custoTotal', 'quantidadeProduzida', and 'custoPorUnidade'. Crucially, it includes an embedded array of 'ingredientes' objects (denormalizing ingredient data directly into the recipe document) to ensure Authorization Independence and simplify data retrieval. No user authentication is required, making all recipes publicly accessible for read and write operations.",
+          "params": [
+            {
+              "name": "recipeId",
+              "description": "The unique identifier for a specific recipe document."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to be simple, efficient, and directly align with the user's requirements for a recipe cost calculator without user authentication. The core design principle here is to embed related data (ingredients) directly within the parent document (recipe) where appropriate, which greatly simplifies data access and eliminates the need for complex authorization rules.\n\n1.  **Embedding Ingredients (Authorization Independence & QAPs):** The most significant decision is to embed the list of `ingredientes` (ingredients) as an array of objects directly within each `Recipe` document in the `/receitas` collection. This design choice is justified by:\n    *   **User's Example:** The user explicitly provided an example structure where ingredients are an array inside the recipe document.\n    *   **Limited Number of Ingredients:** The application specifies a maximum of 10 ingredients per recipe, which is well within Firestore's document size limits for embedded arrays.\n    *   **Atomic Operations:** Ingredients are always created, updated, and deleted in the context of their parent recipe. Embedding them ensures that these operations can be handled as a single, atomic write to the recipe document, simplifying application logic and preventing potential data inconsistencies that could arise from managing separate subcollections.\n    *   **Elimination of `get()` calls in Rules:** By embedding ingredients, there's no need for separate `ingredients` subcollections. Consequently, Firestore security rules do not need to use `get()` to check parent `Recipe` attributes to authorize access to `Ingredient` documents, achieving Authorization Independence. Each recipe document is self-contained.\n\n2.  **Single Collection for Recipes (`/receitas`) (QAPs & Structural Segregation):** All recipes are stored in a single top-level collection named `/receitas`. Since the application does not require user authentication and all recipes are intended to be publicly accessible (both for reading and writing, as per the 'no login' requirement), this single collection perfectly supports the 'Homogeneous Security Posture' mandate. Security rules for `read` and `write` operations will be straightforward (e.g., `allow read, write: if true;`), ensuring that `list` operations (QAPs) on `/receitas` will always return all available documents efficiently without hidden filtering by security rules.\n\n3.  **No User Authentication (Simplified Authorization):** The absence of user login simplifies authorization to its absolute minimum. There's no need for user-specific data, roles, or complex ownership checks. This fulfills the DBAC (Database Access Control) principle by not requiring custom claims and relying purely on database rules for public access.\n\n4.  **Data Clarity and Consistency:** The structure uses descriptive field names (`nomeReceita`, `dataCriacao`, `custoTotal`, etc.) directly matching the user's request. The embedded `ingredientes` array ensures a predictable schema for each ingredient object within the array.\n\nIn summary, this design prioritizes simplicity, directness, and adherence to the user's specified structure. By embedding ingredients, it inherently achieves Authorization Independence for ingredient data and ensures efficient list operations (QAPs) within a single, publicly accessible collection."
+  }
+}
