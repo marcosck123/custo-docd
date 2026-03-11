@@ -1,41 +1,30 @@
-/**
- * # Firestore Security Rules
- *
- * ## Core Philosophy
- * This ruleset implements a completely public data model, as specified by the application requirements which state there is no user login. All data within the `/receitas` collection is accessible for read, create, update, and delete operations by any user, authenticated or not. This approach prioritizes simplicity and rapid development for a public-facing utility where user-specific data ownership is not a requirement.
- *
- * ## Data Structure
- * The entire database consists of a single top-level collection: `/receitas`. Each document in this collection represents a recipe and contains all its associated data, including an embedded array of ingredients. This denormalized structure simplifies data retrieval and security rules, as there are no subcollections or related documents to protect.
- *
- * ## Key Security Decisions
- * - **Public Writes Enabled**: In a rare exception to standard security practices, this ruleset explicitly allows any client to create, update, and delete data. This is a deliberate choice based on the user's requirement for an application "Sem necessidade de login" (without need for login). This is highly insecure for most applications and should be revisited with authentication if the application's requirements change.
- * - **No Data Validation**: In line with the prototyping philosophy, these rules do not validate the shape or type of the data being written. The focus is solely on granting access.
- * - **Denormalization for Authorization**: The model's use of an embedded ingredient array within each recipe document is a prime example of denormalization. This makes authorization trivial, as securing the parent recipe document inherently secures all its ingredient data without needing `get()` calls to other collections.
- *
- */
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    /**
-     * @description Allows completely public, anonymous read and write access to all recipes.
-     * @path        /receitas/{recipeId}
-     * @allow       Any user, authenticated or not, creating a new recipe document `(create)`.
-     * @allow       Any user, authenticated or not, reading a list of all recipes `(list)`.
-     * @deny        No operations are denied based on user identity. A request might fail if it tries to update a document that does not exist.
-     * @principle   Implements a fully public data model as requested, disabling all authorization checks.
-     */
-    match /receitas/{recipeId} {
-      // All recipes are public and can be read by anyone.
-      allow get: if true;
-      allow list: if true;
-
-      // WARNING: These rules allow any user to create, modify, and delete data.
-      // This is insecure for most applications and is only enabled because the
-      // project requirements explicitly state "no login required".
+    // Public access for all collections as per no-login requirement.
+    
+    match /estoque/{itemId} {
+      allow get, list: if true;
       allow create: if true;
-      allow update: if resource != null;
-      allow delete: if resource != null;
+      allow update, delete: if resource != null;
+    }
+
+    match /receitas_massa/{massaId} {
+      allow get, list: if true;
+      allow create: if true;
+      allow update, delete: if resource != null;
+    }
+
+    match /receitas_recheio/{recheioId} {
+      allow get, list: if true;
+      allow create: if true;
+      allow update, delete: if resource != null;
+    }
+
+    match /produtos_finais/{produtoId} {
+      allow get, list: if true;
+      allow create: if true;
+      allow update, delete: if resource != null;
     }
   }
 }

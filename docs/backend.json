@@ -1,62 +1,76 @@
 {
   "entities": {
-    "Recipe": {
-      "title": "Recipe",
+    "StockItem": {
+      "title": "Stock Item",
       "type": "object",
-      "description": "Represents a culinary recipe, detailing its name, creation date, and aggregated cost information, including embedded ingredients.",
+      "description": "An item in the stock/inventory.",
       "properties": {
-        "name": {
-          "type": "string",
-          "description": "The name given to the recipe."
-        },
-        "createdAt": {
-          "type": "string",
-          "description": "The date and time when the recipe was first created, stored as a Firestore Timestamp.",
-          "format": "date-time"
-        },
-        "ingredients": {
-          "type": "array",
-          "description": "Embedded array of ingredient objects used in this recipe.",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": {
-                "type": "string"
-              },
-              "packagePrice": {
-                "type": "string"
-              },
-              "packageQuantity": {
-                "type": "string"
-              },
-              "usedQuantity": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "name",
-              "packagePrice",
-              "packageQuantity",
-              "usedQuantity"
-            ]
-          }
-        },
-        "totalCost": {
-          "type": "number"
-        },
-        "producedUnits": {
-          "type": "string"
-        },
-        "costPerUnit": {
-          "type": "number"
-        }
+        "nome": { "type": "string" },
+        "preco": { "type": "number" },
+        "peso": { "type": "number" },
+        "unidade": { "type": "string" },
+        "dataAtualizacao": { "type": "string", "format": "date-time" }
       },
-      "required": [
-        "name",
-        "createdAt",
-        "ingredients",
-        "totalCost"
-      ]
+      "required": ["nome", "preco", "peso", "unidade", "dataAtualizacao"]
+    },
+    "RecipeIngredient": {
+      "title": "Recipe Ingredient",
+      "type": "object",
+      "description": "Represents an ingredient used in a recipe, linking to a stock item.",
+      "properties": {
+        "stockItemId": { "type": "string" },
+        "nome": { "type": "string" },
+        "quantidadeUsada": { "type": "number" }
+      },
+      "required": ["stockItemId", "nome", "quantidadeUsada"]
+    },
+    "DoughRecipe": {
+      "title": "Dough Recipe",
+      "type": "object",
+      "description": "A recipe for a dough/base.",
+      "properties": {
+        "nome": { "type": "string" },
+        "ingredientes": {
+          "type": "array",
+          "items": { "$ref": "#/backend/entities/RecipeIngredient" }
+        },
+        "rendimento": { "type": "number" },
+        "custoTotal": { "type": "number" },
+        "dataCriacao": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nome", "ingredientes", "rendimento", "custoTotal", "dataCriacao"]
+    },
+    "FillingRecipe": {
+      "title": "Filling Recipe",
+      "type": "object",
+      "description": "A recipe for a filling.",
+      "properties": {
+        "nome": { "type": "string" },
+        "ingredientes": {
+          "type": "array",
+          "items": { "$ref": "#/backend/entities/RecipeIngredient" }
+        },
+        "custoTotal": { "type": "number" },
+        "dataCriacao": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nome", "ingredientes", "custoTotal", "dataCriacao"]
+    },
+    "FinalProduct": {
+      "title": "Final Product",
+      "type": "object",
+      "description": "A final product for sale, composed of other recipes.",
+      "properties": {
+        "nome": { "type": "string" },
+        "massaId": { "type": "string" },
+        "nomeMassa": { "type": "string" },
+        "recheioId": { "type": "string" },
+        "nomeRecheio": { "type": "string" },
+        "quantidadeFinal": { "type": "number" },
+        "custoTotal": { "type": "number" },
+        "custoUnitario": { "type": "number" },
+        "dataCriacao": { "type": "string", "format": "date-time" }
+      },
+      "required": ["nome", "quantidadeFinal", "custoTotal", "custoUnitario", "dataCriacao"]
     }
   },
   "auth": {
@@ -67,12 +81,31 @@
   "firestore": {
     "structure": [
       {
-        "path": "/receitas/{recipeId}",
+        "path": "/estoque/{itemId}",
         "definition": {
-          "schema": {
-            "$ref": "#/backend/entities/Recipe"
-          },
-          "description": "Stores individual recipe documents. Each document contains all recipe data, including an embedded array of ingredients. No user authentication is required, making all recipes publicly accessible for read and write operations."
+          "schema": { "$ref": "#/backend/entities/StockItem" },
+          "description": "Stores individual inventory items."
+        }
+      },
+      {
+        "path": "/receitas_massa/{massaId}",
+        "definition": {
+          "schema": { "$ref": "#/backend/entities/DoughRecipe" },
+          "description": "Stores recipes for doughs/bases."
+        }
+      },
+      {
+        "path": "/receitas_recheio/{recheioId}",
+        "definition": {
+          "schema": { "$ref": "#/backend/entities/FillingRecipe" },
+          "description": "Stores recipes for fillings."
+        }
+      },
+      {
+        "path": "/produtos_finais/{produtoId}",
+        "definition": {
+          "schema": { "$ref": "#/backend/entities/FinalProduct" },
+          "description": "Stores final, sellable products."
         }
       }
     ]
