@@ -33,6 +33,7 @@ export type FillingRecipe = {
   id: string;
   nome: string;
   ingredientes: RecipeIngredient[];
+  rendimento: number; // e.g., 10 portions
   custoTotal: number;
   dataCriacao?: Timestamp;
 };

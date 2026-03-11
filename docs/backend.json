@@ -50,10 +50,11 @@
           "type": "array",
           "items": { "$ref": "#/backend/entities/RecipeIngredient" }
         },
+        "rendimento": { "type": "number" },
         "custoTotal": { "type": "number" },
         "dataCriacao": { "type": "string", "format": "date-time" }
       },
-      "required": ["nome", "ingredientes", "custoTotal", "dataCriacao"]
+      "required": ["nome", "ingredientes", "rendimento", "custoTotal", "dataCriacao"]
     },
     "FinalProduct": {
       "title": "Final Product",

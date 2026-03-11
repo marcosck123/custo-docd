@@ -51,7 +51,7 @@ const RecipeForm = ({
 
   const [nome, setNome] = useState(recipeToEdit?.nome || '');
   const [rendimento, setRendimento] = useState(
-    recipeToEdit && recipeType === 'dough' && 'rendimento' in recipeToEdit
+    recipeToEdit && 'rendimento' in recipeToEdit && recipeToEdit.rendimento
       ? String(recipeToEdit.rendimento)
       : ''
   );
@@ -104,8 +104,8 @@ const RecipeForm = ({
       toast({ title: "Campos incompletos", description: "Preencha o nome da receita e adicione ao menos um ingrediente.", variant: "destructive" });
       return;
     }
-    if (recipeType === 'dough' && (!rendimento || parseFloat(rendimento) <= 0)) {
-        toast({ title: "Rendimento inválido", description: "Por favor, insira um rendimento válido para a massa.", variant: "destructive" });
+    if ((recipeType === 'dough' || recipeType === 'filling') && (!rendimento || parseFloat(rendimento) <= 0)) {
+        toast({ title: "Rendimento inválido", description: "Por favor, insira um rendimento válido para a receita.", variant: "destructive" });
         return;
     }
 
@@ -113,7 +113,7 @@ const RecipeForm = ({
       nome,
       ingredientes: ingredientes.map(({ custo, ...ing }) => ing), // Remove temporary cost property
       custoTotal,
-      ...(recipeType === 'dough' && { rendimento: parseFloat(rendimento) }),
+      rendimento: parseFloat(rendimento),
     };
 
     onSave(recipeData);
@@ -127,12 +127,10 @@ const RecipeForm = ({
         <Input id="recipe-name" value={nome} onChange={(e) => setNome(e.target.value)} placeholder={recipeType === 'dough' ? "Ex: Massa de Brownie" : "Ex: Recheio de Ninho"} />
       </div>
 
-      {recipeType === 'dough' && (
-        <div className="space-y-2">
-          <Label htmlFor="recipe-yield">Rendimento (unidades)</Label>
-          <Input id="recipe-yield" type="number" value={rendimento} onChange={(e) => setRendimento(e.target.value)} placeholder="Ex: 10" />
-        </div>
-      )}
+      <div className="space-y-2">
+        <Label htmlFor="recipe-yield">Rendimento (unidades/porções)</Label>
+        <Input id="recipe-yield" type="number" value={rendimento} onChange={(e) => setRendimento(e.target.value)} placeholder="Ex: 10" />
+      </div>
 
       <Separator />
 
@@ -272,21 +270,23 @@ const RecipeManager = ({ recipeType, title, description, collectionName }: { rec
                             <TableRow>
                                 <TableHead>Nome</TableHead>
                                 <TableHead>Custo Total</TableHead>
-                                {recipeType === 'dough' && <TableHead>Rendimento</TableHead>}
+                                <TableHead>Rendimento</TableHead>
+                                <TableHead>Custo / Unid.</TableHead>
                                 <TableHead className="text-right w-[120px]">Ações</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {isLoadingRecipes ? (
                                 Array.from({length: 3}).map((_, i) => (
-                                    <TableRow key={i}><TableCell colSpan={recipeType === 'dough' ? 4 : 3}><Skeleton className="h-5 w-full"/></TableCell></TableRow>
+                                    <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-5 w-full"/></TableCell></TableRow>
                                 ))
                             ) : recipes && recipes.length > 0 ? (
                                 recipes.map((recipe) => (
                                     <TableRow key={recipe.id}>
                                         <TableCell className="font-medium">{recipe.nome}</TableCell>
                                         <TableCell>{formatCurrency(recipe.custoTotal)}</TableCell>
-                                        {recipeType === 'dough' && 'rendimento' in recipe && <TableCell>{recipe.rendimento} unid.</TableCell>}
+                                        <TableCell>{recipe.rendimento} unid.</TableCell>
+                                        <TableCell>{formatCurrency(recipe.custoTotal / recipe.rendimento)}</TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex items-center justify-end gap-2">
                                                 <Button variant="ghost" size="icon" onClick={() => openFormForEdit(recipe)}><Edit className="h-4 w-4" /></Button>
@@ -310,7 +310,7 @@ const RecipeManager = ({ recipeType, title, description, collectionName }: { rec
                                     </TableRow>
                                 ))
                             ) : (
-                                <TableRow><TableCell colSpan={recipeType === 'dough' ? 4 : 3} className="text-center h-24">Nenhuma receita encontrada.</TableCell></TableRow>
+                                <TableRow><TableCell colSpan={5} className="text-center h-24">Nenhuma receita encontrada.</TableCell></TableRow>
                             )}
                         </TableBody>
                     </Table>
@@ -337,30 +337,41 @@ const FinalProductManager = () => {
     const [nome, setNome] = useState('');
     const [massaId, setMassaId] = useState<string | undefined>(undefined);
     const [recheioId, setRecheioId] = useState<string | undefined>(undefined);
-    const [quantidadeFinal, setQuantidadeFinal] = useState('');
+    const [quantidadeFinal, setQuantidadeFinal] = useState('1');
     
     // Calculations
     const selectedDough = useMemo(() => doughRecipes?.find(r => r.id === massaId), [doughRecipes, massaId]);
     const selectedFilling = useMemo(() => fillingRecipes?.find(r => r.id === recheioId), [fillingRecipes, recheioId]);
 
-    const custoTotal = useMemo(() => {
-        const doughCost = selectedDough?.custoTotal || 0;
-        const fillingCost = selectedFilling?.custoTotal || 0;
-        return doughCost + fillingCost;
+    const custoUnitario = useMemo(() => {
+        if (!selectedDough || !selectedDough.rendimento || selectedDough.rendimento <= 0) {
+            return 0;
+        }
+
+        const doughUnitCost = selectedDough.custoTotal / selectedDough.rendimento;
+        
+        let fillingUnitCost = 0;
+        if (selectedFilling && 'rendimento' in selectedFilling && selectedFilling.rendimento && selectedFilling.rendimento > 0) {
+            fillingUnitCost = selectedFilling.custoTotal / selectedFilling.rendimento;
+        }
+
+        return doughUnitCost + fillingUnitCost;
     }, [selectedDough, selectedFilling]);
 
-    const custoUnitario = useMemo(() => {
+    const custoTotal = useMemo(() => {
         const quant = parseFloat(quantidadeFinal);
-        if (!custoTotal || !quant || quant <= 0) return 0;
-        return custoTotal / quant;
-    }, [custoTotal, quantidadeFinal]);
+        if (!custoUnitario || !quant || quant <= 0) return 0;
+        return custoUnitario * quant;
+    }, [custoUnitario, quantidadeFinal]);
     
     // Handlers
     const handleSaveProduct = () => {
-        if (!firestore || !nome || !massaId || !selectedDough || !quantidadeFinal) {
-            toast({ title: "Campos incompletos", description: "Nome, massa e quantidade são obrigatórios. A receita de massa selecionada precisa existir.", variant: "destructive" });
+        if (!firestore || !nome || !massaId || !selectedDough) {
+            toast({ title: "Campos incompletos", description: "Nome e massa são obrigatórios.", variant: "destructive" });
             return;
         }
+
+        const finalQuantityNum = parseFloat(quantidadeFinal) || 1;
 
         const productData: Omit<FinalProduct, 'id' | 'dataCriacao'> = {
             nome,
@@ -368,8 +379,8 @@ const FinalProductManager = () => {
             nomeMassa: selectedDough.nome,
             recheioId: recheioId === 'none' ? null : recheioId || null,
             nomeRecheio: selectedFilling?.nome || null,
-            quantidadeFinal: parseFloat(quantidadeFinal),
-            custoTotal,
+            quantidadeFinal: finalQuantityNum,
+            custoTotal: custoUnitario * finalQuantityNum,
             custoUnitario,
         };
 
@@ -380,14 +391,14 @@ const FinalProductManager = () => {
         setNome('');
         setMassaId(undefined);
         setRecheioId(undefined);
-        setQuantidadeFinal('');
+        setQuantidadeFinal('1');
     };
 
     return (
         <Card>
             <CardHeader>
                 <CardTitle>Produto Final</CardTitle>
-                <CardDescription>Monte e calcule o custo do seu produto final para venda.</CardDescription>
+                <CardDescription>Monte seu produto com base nas receitas para calcular o custo unitário.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
                 <div className="space-y-2">
@@ -419,23 +430,25 @@ const FinalProductManager = () => {
                     </div>
                 </div>
 
-                <div className="space-y-2">
-                    <Label htmlFor="final-yield">Quantidade Final (Porções/Unidades)</Label>
-                    <Input id="final-yield" type="number" value={quantidadeFinal} onChange={e => setQuantidadeFinal(e.target.value)} placeholder="Ex: 12" />
-                </div>
-
                 <Separator />
 
-                <div className="flex justify-between items-center bg-muted/50 p-4 rounded-lg">
-                    <div>
-                        <p className="text-sm font-medium">Custo Total do Produto</p>
+                <div className="bg-muted/50 p-4 rounded-lg text-center">
+                    <p className="text-sm font-medium text-primary">Custo por Unidade</p>
+                    <p className="text-3xl font-bold">{formatCurrency(custoUnitario)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Este é o custo de produção para uma única unidade do seu produto final.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                    <div className="space-y-2">
+                        <Label htmlFor="final-yield">Quantidade a Produzir</Label>
+                        <Input id="final-yield" type="number" value={quantidadeFinal} onChange={e => setQuantidadeFinal(e.target.value)} placeholder="Ex: 12" />
+                    </div>
+                    <div className="bg-muted/50 p-4 rounded-lg text-center">
+                        <p className="text-sm font-medium">Custo Total da Produção</p>
                         <p className="text-2xl font-bold">{formatCurrency(custoTotal)}</p>
                     </div>
-                    <div className="text-right">
-                        <p className="text-sm font-medium">Custo por Unidade</p>
-                        <p className="text-2xl font-bold text-primary">{formatCurrency(custoUnitario)}</p>
-                    </div>
                 </div>
+
 
                 <Button onClick={handleSaveProduct} className="w-full"><Save className="mr-2 h-4 w-4" />Salvar Produto Final</Button>
             </CardContent>
