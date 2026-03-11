@@ -111,7 +111,18 @@ export const useFirebase = (): FirebaseContextState => {
   const context = useContext(FirebaseContext);
 
   if (context === undefined) {
-    throw new Error('useFirebase must be used within a FirebaseProvider.');
+    // This can happen during server-side rendering if the provider is not correctly wrapped.
+    // Instead of throwing, we return a state indicating services are not ready.
+    // Components using this hook should be prepared to handle this state.
+    return {
+      areServicesAvailable: false,
+      firebaseApp: null,
+      firestore: null,
+      auth: null,
+      user: null,
+      isUserLoading: true,
+      userError: null,
+    };
   }
 
   return context;
