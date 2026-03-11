@@ -3,6 +3,7 @@
 import dynamic from 'next/dynamic';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from '@/components/ui/skeleton';
+import { Cake } from 'lucide-react';
 
 const RecipeFlow = dynamic(
   () => import('@/components/recipe-calculator').then((mod) => mod.RecipeFlow),
@@ -23,9 +24,14 @@ const StockManager = dynamic(
 export default function Home() {
   return (
     <main className="container mx-auto px-4 py-8 md:py-12">
-      <header className="text-center mb-8">
-        <h1 className="text-4xl font-bold text-primary font-headline tracking-tight">Custo Doce</h1>
-        <p className="text-muted-foreground mt-2">Sua calculadora de custo de receitas para confeitaria.</p>
+      <header className="text-center mb-12">
+        <div className="inline-block bg-primary/10 p-4 rounded-full mb-4">
+            <div className="inline-block bg-primary/20 p-3 rounded-full">
+                 <Cake className="h-12 w-12 text-primary" />
+            </div>
+        </div>
+        <h1 className="text-6xl text-foreground font-headline tracking-tight">Custo Doce</h1>
+        <p className="text-xl text-foreground/80 mt-2">Sua calculadora de custo para confeitaria.</p>
       </header>
       <Tabs defaultValue="calculator" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
