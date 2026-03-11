@@ -48,6 +48,12 @@ const RecipeForm = ({
   const [quantidadeUsada, setQuantidadeUsada] = useState('');
   const { toast } = useToast();
 
+  const calculateIngredientCost = useCallback((ing: RecipeIngredient) => {
+    const stockItem = stockItems?.find(s => s.id === ing.stockItemId);
+    if (!stockItem || !stockItem.preco || !stockItem.peso) return 0;
+    return (ing.quantidadeUsada / stockItem.peso) * stockItem.preco;
+  }, [stockItems]);
+
   useEffect(() => {
     if (recipeToEdit) {
       setNome(recipeToEdit.nome);
@@ -61,13 +67,7 @@ const RecipeForm = ({
       setRendimento('');
       setIngredientes([]);
     }
-  }, [recipeToEdit]);
-
-  const calculateIngredientCost = useCallback((ing: RecipeIngredient) => {
-    const stockItem = stockItems?.find(s => s.id === ing.stockItemId);
-    if (!stockItem || !stockItem.preco || !stockItem.peso) return 0;
-    return (ing.quantidadeUsada / stockItem.peso) * stockItem.preco;
-  }, [stockItems]);
+  }, [recipeToEdit, calculateIngredientCost]);
 
   const handleAddIngredient = () => {
     const stockItem = stockItems?.find(item => item.id === selectedStockItemId);
@@ -365,7 +365,7 @@ const FinalProductManager = () => {
             nome,
             massaId,
             nomeMassa: selectedDough?.nome || null,
-            recheioId: recheioId || null,
+            recheioId: recheioId === 'none' ? null : recheioId || null,
             nomeRecheio: selectedFilling?.nome || null,
             quantidadeFinal: parseFloat(quantidadeFinal),
             custoTotal,
