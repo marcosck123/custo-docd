@@ -63,14 +63,14 @@
         "nome": { "type": "string" },
         "massaId": { "type": "string" },
         "nomeMassa": { "type": "string" },
-        "recheioId": { "type": "string" },
-        "nomeRecheio": { "type": "string" },
+        "recheioId": { "type": ["string", "null"] },
+        "nomeRecheio": { "type": ["string", "null"] },
         "quantidadeFinal": { "type": "number" },
         "custoTotal": { "type": "number" },
         "custoUnitario": { "type": "number" },
         "dataCriacao": { "type": "string", "format": "date-time" }
       },
-      "required": ["nome", "quantidadeFinal", "custoTotal", "custoUnitario", "dataCriacao"]
+      "required": ["nome", "massaId", "nomeMassa", "quantidadeFinal", "custoTotal", "custoUnitario", "dataCriacao"]
     }
   },
   "auth": {

@@ -41,8 +41,8 @@ export type FillingRecipe = {
 export type FinalProduct = {
   id: string;
   nome: string;
-  massaId: string | null;
-  nomeMassa: string | null;
+  massaId: string;
+  nomeMassa: string;
   recheioId: string | null;
   nomeRecheio: string | null;
   quantidadeFinal: number; // e.g., 10 portions from the dough

@@ -356,15 +356,15 @@ const FinalProductManager = () => {
     
     // Handlers
     const handleSaveProduct = () => {
-        if (!firestore || !nome || !massaId || !quantidadeFinal) {
-            toast({ title: "Campos incompletos", description: "Nome, massa e quantidade são obrigatórios.", variant: "destructive" });
+        if (!firestore || !nome || !massaId || !selectedDough || !quantidadeFinal) {
+            toast({ title: "Campos incompletos", description: "Nome, massa e quantidade são obrigatórios. A receita de massa selecionada precisa existir.", variant: "destructive" });
             return;
         }
 
         const productData: Omit<FinalProduct, 'id' | 'dataCriacao'> = {
             nome,
             massaId,
-            nomeMassa: selectedDough?.nome || null,
+            nomeMassa: selectedDough.nome,
             recheioId: recheioId === 'none' ? null : recheioId || null,
             nomeRecheio: selectedFilling?.nome || null,
             quantidadeFinal: parseFloat(quantidadeFinal),
