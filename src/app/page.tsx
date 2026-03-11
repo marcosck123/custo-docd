@@ -1,6 +1,24 @@
-import { RecipeFlow } from '@/components/recipe-calculator';
-import { StockManager } from '@/components/recipe-history';
+'use client';
+
+import dynamic from 'next/dynamic';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from '@/components/ui/skeleton';
+
+const RecipeFlow = dynamic(
+  () => import('@/components/recipe-calculator').then((mod) => mod.RecipeFlow),
+  { 
+    ssr: false,
+    loading: () => <Skeleton className="mt-6 w-full h-[500px] rounded-lg" /> 
+  }
+);
+const StockManager = dynamic(
+  () => import('@/components/recipe-history').then((mod) => mod.StockManager),
+  { 
+    ssr: false,
+    loading: () => <Skeleton className="mt-6 w-full h-[500px] rounded-lg" />
+  }
+);
+
 
 export default function Home() {
   return (
