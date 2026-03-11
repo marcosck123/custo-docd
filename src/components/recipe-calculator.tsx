@@ -1,72 +1,517 @@
 "use client";
-import React from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
+import { PlusCircle, Trash2, Edit, Save, XCircle } from 'lucide-react';
+import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { collection, doc, serverTimestamp } from 'firebase/firestore';
+import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import type { StockItem, RecipeIngredient, DoughRecipe, FillingRecipe, FinalProduct } from '@/lib/types';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
-// These components will be created within this file for simplicity.
-// In a larger app, they would be in separate files.
+const formatCurrency = (value: number | null | undefined) => {
+  if (value === null || value === undefined || isNaN(value) || !isFinite(value)) {
+    return "R$ 0,00";
+  }
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+};
 
-const DoughRecipeManager = () => {
-    // This is a placeholder. Full implementation is complex.
+// --- FORMULÁRIO DE RECEITA (MASSA/RECHEIO) ---
+const RecipeForm = ({
+  recipeType,
+  onSave,
+  closeDialog,
+  stockItems,
+  isLoadingStock,
+  recipeToEdit
+}: {
+  recipeType: 'dough' | 'filling';
+  onSave: (data: any) => void;
+  closeDialog: () => void;
+  stockItems: StockItem[] | null;
+  isLoadingStock: boolean;
+  recipeToEdit?: DoughRecipe | FillingRecipe | null;
+}) => {
+  const [nome, setNome] = useState('');
+  const [rendimento, setRendimento] = useState('');
+  const [ingredientes, setIngredientes] = useState<(RecipeIngredient & { custo?: number })[]>([]);
+  const [selectedStockItemId, setSelectedStockItemId] = useState('');
+  const [quantidadeUsada, setQuantidadeUsada] = useState('');
+  const { toast } = useToast();
+
+  useEffect(() => {
+    if (recipeToEdit) {
+      setNome(recipeToEdit.nome);
+      setIngredientes(recipeToEdit.ingredientes.map(ing => ({...ing, custo: calculateIngredientCost(ing)})));
+      if (recipeType === 'dough' && 'rendimento' in recipeToEdit) {
+        setRendimento(recipeToEdit.rendimento.toString());
+      }
+    } else {
+      // Reset form when there's no recipe to edit
+      setNome('');
+      setRendimento('');
+      setIngredientes([]);
+    }
+  }, [recipeToEdit]);
+
+  const calculateIngredientCost = useCallback((ing: RecipeIngredient) => {
+    const stockItem = stockItems?.find(s => s.id === ing.stockItemId);
+    if (!stockItem || !stockItem.preco || !stockItem.peso) return 0;
+    return (ing.quantidadeUsada / stockItem.peso) * stockItem.preco;
+  }, [stockItems]);
+
+  const handleAddIngredient = () => {
+    const stockItem = stockItems?.find(item => item.id === selectedStockItemId);
+    const quant = parseFloat(quantidadeUsada.replace(',', '.'));
+
+    if (!stockItem || !quant || quant <= 0) {
+      toast({ title: "Ingrediente inválido", description: "Selecione um item do estoque e insira uma quantidade válida.", variant: "destructive" });
+      return;
+    }
+
+    const newIngredient: RecipeIngredient & { custo?: number } = {
+      stockItemId: stockItem.id,
+      nome: stockItem.nome,
+      quantidadeUsada: quant,
+    };
+    newIngredient.custo = calculateIngredientCost(newIngredient);
+
+    setIngredientes([...ingredientes, newIngredient]);
+    setSelectedStockItemId('');
+    setQuantidadeUsada('');
+  };
+  
+  const handleRemoveIngredient = (index: number) => {
+    setIngredientes(ingredientes.filter((_, i) => i !== index));
+  };
+
+  const custoTotal = useMemo(() => {
+    return ingredientes.reduce((acc, ing) => acc + (ing.custo || 0), 0);
+  }, [ingredientes]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!nome || ingredientes.length === 0) {
+      toast({ title: "Campos incompletos", description: "Preencha o nome da receita e adicione ao menos um ingrediente.", variant: "destructive" });
+      return;
+    }
+    if (recipeType === 'dough' && (!rendimento || parseFloat(rendimento) <= 0)) {
+        toast({ title: "Rendimento inválido", description: "Por favor, insira um rendimento válido para a massa.", variant: "destructive" });
+        return;
+    }
+
+    const recipeData: Omit<DoughRecipe | FillingRecipe, 'id' | 'dataCriacao'> = {
+      nome,
+      ingredientes: ingredientes.map(({ custo, ...ing }) => ing), // Remove temporary cost property
+      custoTotal,
+      ...(recipeType === 'dough' && { rendimento: parseFloat(rendimento) }),
+    };
+
+    onSave(recipeData);
+    closeDialog();
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-4">
+      <div className="space-y-2">
+        <Label htmlFor="recipe-name">Nome da Receita</Label>
+        <Input id="recipe-name" value={nome} onChange={(e) => setNome(e.target.value)} placeholder={recipeType === 'dough' ? "Ex: Massa de Brownie" : "Ex: Recheio de Ninho"} />
+      </div>
+
+      {recipeType === 'dough' && (
+        <div className="space-y-2">
+          <Label htmlFor="recipe-yield">Rendimento (unidades)</Label>
+          <Input id="recipe-yield" type="number" value={rendimento} onChange={(e) => setRendimento(e.target.value)} placeholder="Ex: 10" />
+        </div>
+      )}
+
+      <Separator />
+
+      <h4 className="font-medium text-md">Ingredientes</h4>
+      <div className="p-4 border rounded-md space-y-4">
+        {ingredientes.length > 0 && (
+          <div className="space-y-2">
+            {ingredientes.map((ing, index) => (
+              <div key={index} className="flex items-center justify-between gap-2 p-2 rounded-md bg-muted/50">
+                  <div>
+                    <p className="font-medium">{ing.nome}</p>
+                    <p className="text-sm text-muted-foreground">{ing.quantidadeUsada}g - {formatCurrency(ing.custo)}</p>
+                  </div>
+                  <Button variant="ghost" size="icon" type="button" onClick={() => handleRemoveIngredient(index)}>
+                      <XCircle className="h-4 w-4 text-destructive" />
+                  </Button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex items-end gap-2">
+          <div className="flex-1 space-y-2">
+            <Label>Item do Estoque</Label>
+            <Select value={selectedStockItemId} onValueChange={setSelectedStockItemId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um ingrediente..." />
+              </SelectTrigger>
+              <SelectContent>
+                {isLoadingStock ? <SelectItem value="loading" disabled>Carregando...</SelectItem> : 
+                  stockItems?.map(item => <SelectItem key={item.id} value={item.id}>{item.nome}</SelectItem>)
+                }
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-32 space-y-2">
+            <Label>Qtd. Usada</Label>
+            <Input value={quantidadeUsada} onChange={(e) => setQuantidadeUsada(e.target.value)} placeholder="Ex: 150" />
+          </div>
+          <Button type="button" onClick={handleAddIngredient}><PlusCircle className="mr-2 h-4 w-4"/>Adicionar</Button>
+        </div>
+      </div>
+      
+      <Separator />
+
+      <div className="text-right">
+        <p className="text-muted-foreground">Custo Total da Receita</p>
+        <p className="text-2xl font-bold">{formatCurrency(custoTotal)}</p>
+      </div>
+
+      <DialogFooter>
+        <DialogClose asChild><Button type="button" variant="outline">Cancelar</Button></DialogClose>
+        <Button type="submit"><Save className="mr-2 h-4 w-4" /> Salvar Receita</Button>
+      </DialogFooter>
+    </form>
+  )
+}
+
+// --- GERENCIADOR DE RECEITAS (MASSA/RECHEIO) ---
+const RecipeManager = ({ recipeType, title, description, collectionName }: { recipeType: 'dough' | 'filling', title: string, description: string, collectionName: string }) => {
+    const { toast } = useToast();
+    const firestore = useFirestore();
+    
+    // State & Data
+    const [isFormOpen, setIsFormOpen] = useState(false);
+    const [editingRecipe, setEditingRecipe] = useState<DoughRecipe | FillingRecipe | null>(null);
+
+    const recipesQuery = useMemoFirebase(() => firestore ? collection(firestore, collectionName) : null, [firestore, collectionName]);
+    const { data: recipes, isLoading: isLoadingRecipes } = useCollection<DoughRecipe | FillingRecipe>(recipesQuery);
+    
+    const stockQuery = useMemoFirebase(() => firestore ? collection(firestore, 'estoque') : null, [firestore]);
+    const { data: stockItems, isLoading: isLoadingStock } = useCollection<StockItem>(stockQuery);
+
+    // Handlers
+    const handleSave = (recipeData: Omit<DoughRecipe | FillingRecipe, 'id' | 'dataCriacao'>) => {
+        if (!firestore) return;
+        const dataToSave = { ...recipeData, dataCriacao: serverTimestamp() };
+
+        if (editingRecipe) {
+            updateDocumentNonBlocking(doc(firestore, collectionName, editingRecipe.id), dataToSave);
+            toast({ title: "Receita atualizada!", description: `${recipeData.nome} foi atualizada.` });
+        } else {
+            addDocumentNonBlocking(collection(firestore, collectionName), dataToSave);
+            toast({ title: "Receita salva!", description: `${recipeData.nome} foi salva.` });
+        }
+        setEditingRecipe(null);
+    };
+
+    const handleDelete = (id: string) => {
+        if (!firestore) return;
+        deleteDocumentNonBlocking(doc(firestore, collectionName, id));
+        toast({ title: "Receita deletada!", variant: "destructive" });
+    };
+
+    const openFormForEdit = (recipe: DoughRecipe | FillingRecipe) => {
+        setEditingRecipe(recipe);
+        setIsFormOpen(true);
+    }
+    
+    const openFormForNew = () => {
+        setEditingRecipe(null);
+        setIsFormOpen(true);
+    }
+    
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Massa</CardTitle>
-                <CardDescription>Crie e gerencie suas receitas de massa.</CardDescription>
+                <div className="flex justify-between items-start">
+                    <div>
+                        <CardTitle>{title}</CardTitle>
+                        <CardDescription>{description}</CardDescription>
+                    </div>
+                     <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+                        <DialogTrigger asChild>
+                            <Button onClick={openFormForNew} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Nova Receita</Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-2xl">
+                            <DialogHeader>
+                                <DialogTitle>{editingRecipe ? `Editar Receita` : `Nova Receita de ${title}`}</DialogTitle>
+                            </DialogHeader>
+                            <RecipeForm 
+                                recipeType={recipeType}
+                                onSave={handleSave} 
+                                closeDialog={() => setIsFormOpen(false)}
+                                stockItems={stockItems}
+                                isLoadingStock={isLoadingStock}
+                                recipeToEdit={editingRecipe}
+                            />
+                        </DialogContent>
+                    </Dialog>
+                </div>
             </CardHeader>
             <CardContent>
-                <p className="text-muted-foreground">Funcionalidade de massa a ser implementada aqui.</p>
+                <div className="w-full overflow-auto rounded-md border">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Nome</TableHead>
+                                <TableHead>Custo Total</TableHead>
+                                {recipeType === 'dough' && <TableHead>Rendimento</TableHead>}
+                                <TableHead className="text-right w-[120px]">Ações</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {isLoadingRecipes ? (
+                                Array.from({length: 3}).map((_, i) => (
+                                    <TableRow key={i}><TableCell colSpan={recipeType === 'dough' ? 4 : 3}><Skeleton className="h-5 w-full"/></TableCell></TableRow>
+                                ))
+                            ) : recipes && recipes.length > 0 ? (
+                                recipes.map((recipe) => (
+                                    <TableRow key={recipe.id}>
+                                        <TableCell className="font-medium">{recipe.nome}</TableCell>
+                                        <TableCell>{formatCurrency(recipe.custoTotal)}</TableCell>
+                                        {recipeType === 'dough' && 'rendimento' in recipe && <TableCell>{recipe.rendimento} unid.</TableCell>}
+                                        <TableCell className="text-right">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <Button variant="ghost" size="icon" onClick={() => openFormForEdit(recipe)}><Edit className="h-4 w-4" /></Button>
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive/80" /></Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+                                                            <AlertDialogDescription>Essa ação não pode ser desfeita. Isso irá deletar permanentemente a receita "{recipe.nome}".</AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={() => handleDelete(recipe.id)}>Deletar</AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow><TableCell colSpan={recipeType === 'dough' ? 4 : 3} className="text-center h-24">Nenhuma receita encontrada.</TableCell></TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
             </CardContent>
         </Card>
-    )
-}
+    );
+};
 
-const FillingRecipeManager = () => {
-    // This is a placeholder. Full implementation is complex.
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Recheio</CardTitle>
-                <CardDescription>Crie e gerencie suas receitas de recheio.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <p className="text-muted-foreground">Funcionalidade de recheio a ser implementada aqui.</p>
-            </CardContent>
-        </Card>
-    )
-}
 
+// --- GERENCIADOR DE PRODUTO FINAL ---
 const FinalProductManager = () => {
-    // This is a placeholder. Full implementation is complex.
+    const { toast } = useToast();
+    const firestore = useFirestore();
+    
+    // Data
+    const doughRecipesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'receitas_massa') : null, [firestore]);
+    const { data: doughRecipes, isLoading: isLoadingDough } = useCollection<DoughRecipe>(doughRecipesQuery);
+    
+    const fillingRecipesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'receitas_recheio') : null, [firestore]);
+    const { data: fillingRecipes, isLoading: isLoadingFilling } = useCollection<FillingRecipe>(fillingRecipesQuery);
+    
+    // Form State
+    const [nome, setNome] = useState('');
+    const [massaId, setMassaId] = useState<string | undefined>(undefined);
+    const [recheioId, setRecheioId] = useState<string | undefined>(undefined);
+    const [quantidadeFinal, setQuantidadeFinal] = useState('');
+    
+    // Calculations
+    const selectedDough = useMemo(() => doughRecipes?.find(r => r.id === massaId), [doughRecipes, massaId]);
+    const selectedFilling = useMemo(() => fillingRecipes?.find(r => r.id === recheioId), [fillingRecipes, recheioId]);
+
+    const custoTotal = useMemo(() => {
+        const doughCost = selectedDough?.custoTotal || 0;
+        const fillingCost = selectedFilling?.custoTotal || 0;
+        return doughCost + fillingCost;
+    }, [selectedDough, selectedFilling]);
+
+    const custoUnitario = useMemo(() => {
+        const quant = parseFloat(quantidadeFinal);
+        if (!custoTotal || !quant || quant <= 0) return 0;
+        return custoTotal / quant;
+    }, [custoTotal, quantidadeFinal]);
+    
+    // Handlers
+    const handleSaveProduct = () => {
+        if (!firestore || !nome || !massaId || !quantidadeFinal) {
+            toast({ title: "Campos incompletos", description: "Nome, massa e quantidade são obrigatórios.", variant: "destructive" });
+            return;
+        }
+
+        const productData: Omit<FinalProduct, 'id' | 'dataCriacao'> = {
+            nome,
+            massaId,
+            nomeMassa: selectedDough?.nome || null,
+            recheioId: recheioId || null,
+            nomeRecheio: selectedFilling?.nome || null,
+            quantidadeFinal: parseFloat(quantidadeFinal),
+            custoTotal,
+            custoUnitario,
+        };
+
+        addDocumentNonBlocking(collection(firestore, 'produtos_finais'), { ...productData, dataCriacao: serverTimestamp() });
+        toast({ title: "Produto Salvo!", description: `${nome} foi adicionado aos seus produtos.` });
+
+        // Reset form
+        setNome('');
+        setMassaId(undefined);
+        setRecheioId(undefined);
+        setQuantidadeFinal('');
+    };
+
     return (
         <Card>
             <CardHeader>
                 <CardTitle>Produto Final</CardTitle>
-                <CardDescription>Monte e calcule o custo do seu produto final.</CardDescription>
+                <CardDescription>Monte e calcule o custo do seu produto final para venda.</CardDescription>
             </CardHeader>
-            <CardContent>
-                <p className="text-muted-foreground">Funcionalidade de produto final a ser implementada aqui.</p>
+            <CardContent className="space-y-6">
+                <div className="space-y-2">
+                    <Label htmlFor="product-name">Nome do Produto Final</Label>
+                    <Input id="product-name" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Bolo no pote Ninho com Brigadeiro" />
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label>Receita da Massa</Label>
+                        <Select value={massaId} onValueChange={setMassaId}>
+                            <SelectTrigger><SelectValue placeholder="Selecione a massa..." /></SelectTrigger>
+                            <SelectContent>
+                                {isLoadingDough ? <SelectItem value="loading" disabled>Carregando...</SelectItem> :
+                                 doughRecipes?.map(r => <SelectItem key={r.id} value={r.id}>{r.nome}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                     <div className="space-y-2">
+                        <Label>Receita do Recheio (Opcional)</Label>
+                        <Select value={recheioId} onValueChange={setRecheioId}>
+                            <SelectTrigger><SelectValue placeholder="Selecione o recheio..." /></SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">Nenhum recheio</SelectItem>
+                                {isLoadingFilling ? <SelectItem value="loading-filling" disabled>Carregando...</SelectItem> :
+                                 fillingRecipes?.map(r => <SelectItem key={r.id} value={r.id}>{r.nome}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
+
+                <div className="space-y-2">
+                    <Label htmlFor="final-yield">Quantidade Final (Porções/Unidades)</Label>
+                    <Input id="final-yield" type="number" value={quantidadeFinal} onChange={e => setQuantidadeFinal(e.target.value)} placeholder="Ex: 12" />
+                </div>
+
+                <Separator />
+
+                <div className="flex justify-between items-center bg-muted/50 p-4 rounded-lg">
+                    <div>
+                        <p className="text-sm font-medium">Custo Total do Produto</p>
+                        <p className="text-2xl font-bold">{formatCurrency(custoTotal)}</p>
+                    </div>
+                    <div className="text-right">
+                        <p className="text-sm font-medium">Custo por Unidade</p>
+                        <p className="text-2xl font-bold text-primary">{formatCurrency(custoUnitario)}</p>
+                    </div>
+                </div>
+
+                <Button onClick={handleSaveProduct} className="w-full"><Save className="mr-2 h-4 w-4" />Salvar Produto Final</Button>
             </CardContent>
         </Card>
-    )
-}
+    );
+};
 
 
+// --- GERENCIADOR DE PRODUTOS SALVOS ---
 const SavedProductsManager = () => {
+    const firestore = useFirestore();
+    const { toast } = useToast();
+    
+    const productsQuery = useMemoFirebase(() => firestore ? collection(firestore, 'produtos_finais') : null, [firestore]);
+    const { data: products, isLoading } = useCollection<FinalProduct>(productsQuery);
+
+    const handleDelete = (id: string) => {
+        if (!firestore) return;
+        deleteDocumentNonBlocking(doc(firestore, 'produtos_finais', id));
+        toast({ title: "Produto deletado!", variant: "destructive" });
+    }
+
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Produtos Salvos</CardTitle>
-                <CardDescription>Veja e gerencie seus produtos finais.</CardDescription>
+                <CardTitle>Produtos Finais Salvos</CardTitle>
+                <CardDescription>Veja e gerencie seus produtos cadastrados.</CardDescription>
             </CardHeader>
             <CardContent>
-                 <p className="text-muted-foreground">Lista de produtos salvos a ser implementada aqui.</p>
+                <div className="w-full overflow-auto rounded-md border">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>Nome do Produto</TableHead>
+                                <TableHead>Custo Unitário</TableHead>
+                                <TableHead>Custo Total</TableHead>
+                                <TableHead>Qtd.</TableHead>
+                                <TableHead className="text-right w-[80px]">Ações</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {isLoading ? (
+                                Array.from({length: 4}).map((_, i) => (
+                                    <TableRow key={i}><TableCell colSpan={5}><Skeleton className="h-5 w-full"/></TableCell></TableRow>
+                                ))
+                            ) : products && products.length > 0 ? (
+                                products.map((product) => (
+                                    <TableRow key={product.id}>
+                                        <TableCell className="font-medium">{product.nome}</TableCell>
+                                        <TableCell>{formatCurrency(product.custoUnitario)}</TableCell>
+                                        <TableCell>{formatCurrency(product.custoTotal)}</TableCell>
+                                        <TableCell>{product.quantidadeFinal} unid.</TableCell>
+                                        <TableCell className="text-right">
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive/80" /></Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent>
+                                                    <AlertDialogHeader><AlertDialogTitle>Você tem certeza?</AlertDialogTitle><AlertDialogDescription>Essa ação não pode ser desfeita. Isso irá deletar permanentemente o produto "{product.nome}".</AlertDialogDescription></AlertDialogHeader>
+                                                    <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={() => handleDelete(product.id)}>Deletar</AlertDialogAction></AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow><TableCell colSpan={5} className="text-center h-24">Nenhum produto final salvo.</TableCell></TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
             </CardContent>
         </Card>
-    )
-}
+    );
+};
 
-
+// --- COMPONENTE PRINCIPAL DO FLUXO ---
 export function RecipeFlow() {
   return (
     <Tabs defaultValue="creator" className="w-full mt-6">
@@ -82,10 +527,10 @@ export function RecipeFlow() {
             <TabsTrigger value="product">3. Produto Final</TabsTrigger>
           </TabsList>
           <TabsContent value="dough" className="mt-4">
-            <DoughRecipeManager />
+            <RecipeManager recipeType="dough" title="Massa" description="Crie e gerencie suas receitas de massa." collectionName="receitas_massa" />
           </TabsContent>
           <TabsContent value="filling" className="mt-4">
-            <FillingRecipeManager />
+             <RecipeManager recipeType="filling" title="Recheio" description="Crie e gerencie suas receitas de recheio." collectionName="receitas_recheio" />
           </TabsContent>
           <TabsContent value="product" className="mt-4">
             <FinalProductManager />
