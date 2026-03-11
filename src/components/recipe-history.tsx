@@ -44,8 +44,8 @@ const StockItemForm = ({ item, onSave, closeDialog }: { item?: StockItem, onSave
         const precoNum = parseFloat(preco.replace(',', '.'));
         const pesoNum = parseFloat(peso.replace(',', '.'));
 
-        if (!nome || !precoNum || !pesoNum || !unidade) {
-            toast({ title: "Campos incompletos", description: "Por favor, preencha todos os campos.", variant: "destructive" });
+        if (!nome || isNaN(precoNum) || precoNum < 0 || isNaN(pesoNum) || pesoNum <= 0 || !unidade) {
+            toast({ title: "Campos inválidos", description: "Verifique se todos os campos estão preenchidos corretamente. Preço e peso não podem ser negativos e o peso não pode ser zero.", variant: "destructive" });
             return;
         }
 

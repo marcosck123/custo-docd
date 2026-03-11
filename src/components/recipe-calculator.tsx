@@ -41,33 +41,33 @@ const RecipeForm = ({
   isLoadingStock: boolean;
   recipeToEdit?: DoughRecipe | FillingRecipe | null;
 }) => {
-  const [nome, setNome] = useState('');
-  const [rendimento, setRendimento] = useState('');
-  const [ingredientes, setIngredientes] = useState<(RecipeIngredient & { custo?: number })[]>([]);
-  const [selectedStockItemId, setSelectedStockItemId] = useState('');
-  const [quantidadeUsada, setQuantidadeUsada] = useState('');
   const { toast } = useToast();
 
   const calculateIngredientCost = useCallback((ing: RecipeIngredient) => {
     const stockItem = stockItems?.find(s => s.id === ing.stockItemId);
-    if (!stockItem || !stockItem.preco || !stockItem.peso) return 0;
+    if (!stockItem || typeof stockItem.preco === 'undefined' || !stockItem.peso || stockItem.peso <= 0) return 0;
     return (ing.quantidadeUsada / stockItem.peso) * stockItem.preco;
   }, [stockItems]);
 
+  const [nome, setNome] = useState(recipeToEdit?.nome || '');
+  const [rendimento, setRendimento] = useState(
+    recipeToEdit && recipeType === 'dough' && 'rendimento' in recipeToEdit
+      ? String(recipeToEdit.rendimento)
+      : ''
+  );
+  
+  const [ingredientes, setIngredientes] = useState<(RecipeIngredient & { custo?: number })[]>(
+    () => recipeToEdit?.ingredientes.map(ing => ({...ing, custo: calculateIngredientCost(ing)})) || []
+  );
+
+  const [selectedStockItemId, setSelectedStockItemId] = useState('');
+  const [quantidadeUsada, setQuantidadeUsada] = useState('');
+
+  // Recalculate costs if stock item prices change
   useEffect(() => {
-    if (recipeToEdit) {
-      setNome(recipeToEdit.nome);
-      setIngredientes(recipeToEdit.ingredientes.map(ing => ({...ing, custo: calculateIngredientCost(ing)})));
-      if (recipeType === 'dough' && 'rendimento' in recipeToEdit) {
-        setRendimento(recipeToEdit.rendimento.toString());
-      }
-    } else {
-      // Reset form when there's no recipe to edit
-      setNome('');
-      setRendimento('');
-      setIngredientes([]);
-    }
-  }, [recipeToEdit, calculateIngredientCost]);
+    setIngredientes(ings => ings.map(ing => ({ ...ing, custo: calculateIngredientCost(ing) })));
+  }, [calculateIngredientCost]);
+
 
   const handleAddIngredient = () => {
     const stockItem = stockItems?.find(item => item.id === selectedStockItemId);
@@ -253,6 +253,7 @@ const RecipeManager = ({ recipeType, title, description, collectionName }: { rec
                                 <DialogTitle>{editingRecipe ? `Editar Receita` : `Nova Receita de ${title}`}</DialogTitle>
                             </DialogHeader>
                             <RecipeForm 
+                                key={editingRecipe ? editingRecipe.id : 'new-recipe'}
                                 recipeType={recipeType}
                                 onSave={handleSave} 
                                 closeDialog={() => setIsFormOpen(false)}
