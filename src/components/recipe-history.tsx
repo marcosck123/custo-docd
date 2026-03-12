@@ -160,11 +160,11 @@ export function StockManager() {
     }
 
   return (
-    <Card className="shadow-sm mt-6">
+    <Card className="shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-4">
         <div className="space-y-1">
-          <CardTitle>Gerenciador de Estoque</CardTitle>
-          <CardDescription>Adicione, edite e remova os ingredientes e produtos do seu estoque.</CardDescription>
+          <CardTitle>Itens de Estoque</CardTitle>
+          <CardDescription>Adicione, edite e remova os itens do seu inventário.</CardDescription>
         </div>
         <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
             <DialogTrigger asChild>

@@ -616,7 +616,7 @@ const SavedProductsManager = () => {
 // --- COMPONENTE PRINCIPAL DO FLUXO ---
 export function RecipeFlow() {
   return (
-    <Tabs defaultValue="creator" className="w-full mt-6">
+    <Tabs defaultValue="creator" className="w-full">
       <TabsList className="grid w-full grid-cols-2">
         <TabsTrigger value="creator">Nova Receita</TabsTrigger>
         <TabsTrigger value="saved">Produtos Salvos</TabsTrigger>
