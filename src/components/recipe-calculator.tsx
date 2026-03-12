@@ -159,7 +159,7 @@ const RecipeForm = ({
         <div className="flex items-end gap-2">
           <div className="flex-1 space-y-2">
             <Label>Item do Estoque</Label>
-              <Popover open={isComboboxOpen} onOpenChange={setIsComboboxOpen}>
+              <Popover open={isComboboxOpen} onOpenChange={setIsComboboxOpen} modal={false}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
