@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -88,9 +88,20 @@ export function StockManager() {
     const firestore = useFirestore();
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<StockItem | undefined>(undefined);
+    const [searchTerm, setSearchTerm] = useState('');
 
     const stockQuery = useMemoFirebase(() => firestore ? collection(firestore, 'estoque') : null, [firestore]);
     const { data: stockItems, isLoading } = useCollection<StockItem>(stockQuery);
+
+    const filteredStockItems = useMemo(() => {
+        if (!stockItems) {
+            return [];
+        }
+        return stockItems.filter(item =>
+            item.nome.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+    }, [stockItems, searchTerm]);
+
 
     const handleSave = (itemData: Omit<StockItem, 'id' | 'dataAtualizacao'>) => {
         if (!firestore) return;
@@ -149,6 +160,14 @@ export function StockManager() {
         </Dialog>
       </CardHeader>
       <CardContent>
+        <div className="py-4">
+            <Input
+                placeholder="Pesquisar no estoque..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="max-w-sm"
+            />
+        </div>
         <div className="w-full overflow-auto rounded-md border">
           <Table>
             <TableHeader>
@@ -173,8 +192,8 @@ export function StockManager() {
                     <TableCell className="text-center"><Skeleton className="h-8 w-20 mx-auto" /></TableCell>
                   </TableRow>
                 ))
-              ) : stockItems && stockItems.length > 0 ? (
-                stockItems.sort((a,b) => (a.nome > b.nome) ? 1 : -1).map((item) => (
+              ) : filteredStockItems && filteredStockItems.length > 0 ? (
+                filteredStockItems.sort((a,b) => (a.nome > b.nome) ? 1 : -1).map((item) => (
                   <TableRow key={item.id}>
                     <TableCell className="font-medium">{item.nome}</TableCell>
                     <TableCell>{formatCurrency(item.preco)}</TableCell>
@@ -196,7 +215,7 @@ export function StockManager() {
               ) : (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
-                    Nenhum item no estoque. Adicione um para começar.
+                     {searchTerm ? "Nenhum item encontrado com esse nome." : "Nenhum item no estoque. Adicione um para começar."}
                   </TableCell>
                 </TableRow>
               )}

@@ -11,12 +11,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Trash2, Edit, Save, XCircle } from 'lucide-react';
+import { PlusCircle, Trash2, Edit, Save, XCircle, ChevronsUpDown, Check } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, doc, serverTimestamp } from 'firebase/firestore';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import type { StockItem, RecipeIngredient, DoughRecipe, FillingRecipe, FinalProduct } from '@/lib/types';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { cn } from '@/lib/utils';
+
 
 const formatCurrency = (value: number | null | undefined) => {
   if (value === null || value === undefined || isNaN(value) || !isFinite(value)) {
@@ -62,6 +66,7 @@ const RecipeForm = ({
 
   const [selectedStockItemId, setSelectedStockItemId] = useState('');
   const [quantidadeUsada, setQuantidadeUsada] = useState('');
+  const [isComboboxOpen, setIsComboboxOpen] = useState(false);
 
   // Recalculate costs if stock item prices change
   useEffect(() => {
@@ -154,16 +159,51 @@ const RecipeForm = ({
         <div className="flex items-end gap-2">
           <div className="flex-1 space-y-2">
             <Label>Item do Estoque</Label>
-            <Select value={selectedStockItemId} onValueChange={setSelectedStockItemId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione um ingrediente..." />
-              </SelectTrigger>
-              <SelectContent>
-                {isLoadingStock ? <SelectItem value="loading" disabled>Carregando...</SelectItem> : 
-                  stockItems?.map(item => <SelectItem key={item.id} value={item.id}>{item.nome}</SelectItem>)
-                }
-              </SelectContent>
-            </Select>
+              <Popover open={isComboboxOpen} onOpenChange={setIsComboboxOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={isComboboxOpen}
+                    className="w-full justify-between"
+                  >
+                    {selectedStockItemId
+                      ? stockItems?.find((item) => item.id === selectedStockItemId)?.nome
+                      : "Selecione um ingrediente..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                  <Command>
+                    <CommandInput placeholder="Pesquisar ingrediente..." />
+                    <CommandList>
+                      <CommandEmpty>Nenhum ingrediente encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        {isLoadingStock ? <CommandItem disabled>Carregando...</CommandItem> : 
+                          stockItems?.map(item => (
+                            <CommandItem
+                              key={item.id}
+                              value={item.nome}
+                              onSelect={() => {
+                                setSelectedStockItemId(item.id);
+                                setIsComboboxOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  selectedStockItemId === item.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {item.nome}
+                            </CommandItem>
+                          ))
+                        }
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
           </div>
           <div className="w-32 space-y-2">
             <Label>Qtd. Usada</Label>
