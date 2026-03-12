@@ -71,6 +71,14 @@
         "nomeMassa": { "type": "string" },
         "recheioId": { "type": ["string", "null"] },
         "nomeRecheio": { "type": ["string", "null"] },
+        "materialPercentage": {
+          "type": "number",
+          "description": "Percentage cost added for materials."
+        },
+        "consumoPercentage": {
+          "type": "number",
+          "description": "Percentage cost added for consumables."
+        },
         "quantidadeFinal": { "type": "number" },
         "custoTotal": { "type": "number" },
         "custoUnitario": { "type": "number" },

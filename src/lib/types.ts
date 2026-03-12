@@ -47,6 +47,8 @@ export type FinalProduct = {
   nomeMassa: string;
   recheioId: string | null;
   nomeRecheio: string | null;
+  materialPercentage?: number;
+  consumoPercentage?: number;
   quantidadeFinal: number; // e.g., 10 portions from the dough
   custoTotal: number;
   custoUnitario: number;

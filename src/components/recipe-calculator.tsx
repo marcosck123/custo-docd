@@ -378,6 +378,8 @@ const FinalProductManager = () => {
     const [massaId, setMassaId] = useState<string | undefined>(undefined);
     const [recheioId, setRecheioId] = useState<string | undefined>(undefined);
     const [quantidadeFinal, setQuantidadeFinal] = useState('1');
+    const [materialPercentage, setMaterialPercentage] = useState('0');
+    const [consumoPercentage, setConsumoPercentage] = useState('0');
     
     // Calculations
     const selectedDough = useMemo(() => doughRecipes?.find(r => r.id === massaId), [doughRecipes, massaId]);
@@ -395,8 +397,16 @@ const FinalProductManager = () => {
             fillingUnitCost = selectedFilling.custoTotal / selectedFilling.rendimento;
         }
 
-        return doughUnitCost + fillingUnitCost;
-    }, [selectedDough, selectedFilling]);
+        const baseUnitCost = doughUnitCost + fillingUnitCost;
+        
+        const matPercentage = parseFloat(materialPercentage.replace(',', '.')) || 0;
+        const consPercentage = parseFloat(consumoPercentage.replace(',', '.')) || 0;
+
+        const materialCost = baseUnitCost * (matPercentage / 100);
+        const consumoCost = baseUnitCost * (consPercentage / 100);
+
+        return baseUnitCost + materialCost + consumoCost;
+    }, [selectedDough, selectedFilling, materialPercentage, consumoPercentage]);
 
     const custoTotal = useMemo(() => {
         const quant = parseFloat(quantidadeFinal);
@@ -412,6 +422,8 @@ const FinalProductManager = () => {
         }
 
         const finalQuantityNum = parseFloat(quantidadeFinal) || 1;
+        const matPercentageNum = parseFloat(materialPercentage.replace(',', '.')) || 0;
+        const consPercentageNum = parseFloat(consumoPercentage.replace(',', '.')) || 0;
 
         const productData: Omit<FinalProduct, 'id' | 'dataCriacao'> = {
             nome,
@@ -419,6 +431,8 @@ const FinalProductManager = () => {
             nomeMassa: selectedDough.nome,
             recheioId: recheioId === 'none' ? null : recheioId || null,
             nomeRecheio: selectedFilling?.nome || null,
+            materialPercentage: matPercentageNum,
+            consumoPercentage: consPercentageNum,
             quantidadeFinal: finalQuantityNum,
             custoTotal: custoUnitario * finalQuantityNum,
             custoUnitario,
@@ -432,6 +446,8 @@ const FinalProductManager = () => {
         setMassaId(undefined);
         setRecheioId(undefined);
         setQuantidadeFinal('1');
+        setMaterialPercentage('0');
+        setConsumoPercentage('0');
     };
 
     return (
@@ -467,6 +483,31 @@ const FinalProductManager = () => {
                                  fillingRecipes?.map(r => <SelectItem key={r.id} value={r.id}>{r.nome}</SelectItem>)}
                             </SelectContent>
                         </Select>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="material-percentage">Adicional de Material (%)</Label>
+                        <Input 
+                            id="material-percentage"
+                            type="number"
+                            value={materialPercentage} 
+                            onChange={e => setMaterialPercentage(e.target.value)} 
+                            placeholder="Ex: 10"
+                        />
+                        <p className="text-xs text-muted-foreground">Para embalagens, adesivos, etc.</p>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="consumo-percentage">Adicional de Consumo (%)</Label>
+                        <Input 
+                            id="consumo-percentage"
+                            type="number"
+                            value={consumoPercentage} 
+                            onChange={e => setConsumoPercentage(e.target.value)} 
+                            placeholder="Ex: 5"
+                        />
+                        <p className="text-xs text-muted-foreground">Para gás, energia elétrica, etc.</p>
                     </div>
                 </div>
 
@@ -537,7 +578,14 @@ const SavedProductsManager = () => {
                             ) : products && products.length > 0 ? (
                                 products.map((product) => (
                                     <TableRow key={product.id}>
-                                        <TableCell className="font-medium">{product.nome}</TableCell>
+                                        <TableCell className="font-medium">
+                                            {product.nome}
+                                            {(product.materialPercentage || product.consumoPercentage) && (
+                                                <p className="text-xs text-muted-foreground">
+                                                    (+{product.materialPercentage || 0}% mat, +{product.consumoPercentage || 0}% cons)
+                                                </p>
+                                            )}
+                                        </TableCell>
                                         <TableCell>{formatCurrency(product.custoUnitario)}</TableCell>
                                         <TableCell>{formatCurrency(product.custoTotal)}</TableCell>
                                         <TableCell>{product.quantidadeFinal} unid.</TableCell>
