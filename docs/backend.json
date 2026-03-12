@@ -9,9 +9,14 @@
         "preco": { "type": "number" },
         "peso": { "type": "number" },
         "unidade": { "type": "string" },
+        "categoria": {
+          "type": "string",
+          "description": "A categoria do item de estoque.",
+          "enum": ["Ingrediente", "Material", "Consumo"]
+        },
         "dataAtualizacao": { "type": "string", "format": "date-time" }
       },
-      "required": ["nome", "preco", "peso", "unidade", "dataAtualizacao"]
+      "required": ["nome", "preco", "peso", "unidade", "categoria", "dataAtualizacao"]
     },
     "RecipeIngredient": {
       "title": "Recipe Ingredient",

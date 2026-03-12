@@ -7,6 +7,7 @@ export type StockItem = {
   preco: number;
   peso: number;
   unidade: string;
+  categoria: 'Ingrediente' | 'Material' | 'Consumo';
   dataAtualizacao?: Timestamp;
 };
 

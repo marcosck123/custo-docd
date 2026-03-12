@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PlusCircle, Trash2, Edit, Save, X } from 'lucide-react';
+import { PlusCircle, Trash2, Edit, Save } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, doc, serverTimestamp } from 'firebase/firestore';
@@ -16,6 +16,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Skeleton } from './ui/skeleton';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 const formatCurrency = (value: number) => {
   if (isNaN(value) || !isFinite(value)) {
@@ -37,6 +39,7 @@ const StockItemForm = ({ item, onSave, closeDialog }: { item?: StockItem, onSave
     const [preco, setPreco] = useState(item?.preco?.toString() || '');
     const [peso, setPeso] = useState(item?.peso?.toString() || '');
     const [unidade, setUnidade] = useState(item?.unidade || '');
+    const [categoria, setCategoria] = useState<StockItem['categoria']>(item?.categoria || 'Ingrediente');
     const { toast } = useToast();
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -44,12 +47,12 @@ const StockItemForm = ({ item, onSave, closeDialog }: { item?: StockItem, onSave
         const precoNum = parseFloat(preco.replace(',', '.'));
         const pesoNum = parseFloat(peso.replace(',', '.'));
 
-        if (!nome || isNaN(precoNum) || precoNum < 0 || isNaN(pesoNum) || pesoNum <= 0 || !unidade) {
+        if (!nome || isNaN(precoNum) || precoNum < 0 || isNaN(pesoNum) || pesoNum <= 0 || !unidade || !categoria) {
             toast({ title: "Campos inválidos", description: "Verifique se todos os campos estão preenchidos corretamente. Preço e peso não podem ser negativos e o peso não pode ser zero.", variant: "destructive" });
             return;
         }
 
-        onSave({ nome, preco: precoNum, peso: pesoNum, unidade });
+        onSave({ nome, preco: precoNum, peso: pesoNum, unidade, categoria });
         closeDialog();
     };
 
@@ -58,6 +61,19 @@ const StockItemForm = ({ item, onSave, closeDialog }: { item?: StockItem, onSave
             <div className="space-y-2">
                 <Label htmlFor="nome">Nome do Produto/Ingrediente</Label>
                 <Input id="nome" value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex: Farinha de Trigo" />
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="categoria">Categoria</Label>
+                <Select value={categoria} onValueChange={(value) => setCategoria(value as StockItem['categoria'])}>
+                    <SelectTrigger id="categoria">
+                        <SelectValue placeholder="Selecione uma categoria" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="Ingrediente">Ingrediente</SelectItem>
+                        <SelectItem value="Material">Material (Embalagens, etc.)</SelectItem>
+                        <SelectItem value="Consumo">Consumo (Gás, Energia, etc.)</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
             <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -89,6 +105,7 @@ export function StockManager() {
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<StockItem | undefined>(undefined);
     const [searchTerm, setSearchTerm] = useState('');
+    const [activeCategory, setActiveCategory] = useState('all');
 
     const stockQuery = useMemoFirebase(() => firestore ? collection(firestore, 'estoque') : null, [firestore]);
     const { data: stockItems, isLoading } = useCollection<StockItem>(stockQuery);
@@ -97,10 +114,15 @@ export function StockManager() {
         if (!stockItems) {
             return [];
         }
-        return stockItems.filter(item =>
+        
+        const byCategory = activeCategory === 'all'
+            ? stockItems
+            : stockItems.filter(item => item.categoria === activeCategory);
+
+        return byCategory.filter(item =>
             item.nome.toLowerCase().includes(searchTerm.toLowerCase())
         );
-    }, [stockItems, searchTerm]);
+    }, [stockItems, searchTerm, activeCategory]);
 
 
     const handleSave = (itemData: Omit<StockItem, 'id' | 'dataAtualizacao'>) => {
@@ -160,68 +182,73 @@ export function StockManager() {
         </Dialog>
       </CardHeader>
       <CardContent>
-        <div className="py-4">
-            <Input
-                placeholder="Pesquisar no estoque..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="max-w-sm"
-            />
-        </div>
-        <div className="w-full overflow-auto rounded-md border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead>Preço</TableHead>
-                <TableHead>Peso/Qtd.</TableHead>
-                <TableHead>Unidade</TableHead>
-                <TableHead>Última Atualização</TableHead>
-                <TableHead className="text-center w-[120px]">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                    <TableCell className="text-center"><Skeleton className="h-8 w-20 mx-auto" /></TableCell>
+        <Tabs value={activeCategory} onValueChange={setActiveCategory}>
+            <div className="flex justify-between items-center flex-wrap gap-4 py-4">
+                <TabsList>
+                    <TabsTrigger value="all">Todos</TabsTrigger>
+                    <TabsTrigger value="Ingrediente">Ingredientes</TabsTrigger>
+                    <TabsTrigger value="Material">Materiais</TabsTrigger>
+                    <TabsTrigger value="Consumo">Consumos</TabsTrigger>
+                </TabsList>
+                <Input
+                    placeholder="Pesquisar no estoque..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="max-w-sm"
+                />
+            </div>
+            <div className="w-full overflow-auto rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>Preço</TableHead>
+                    <TableHead>Peso/Qtd.</TableHead>
+                    <TableHead>Unidade</TableHead>
+                    <TableHead>Categoria</TableHead>
+                    <TableHead>Última Atualização</TableHead>
+                    <TableHead className="text-center w-[120px]">Ações</TableHead>
                   </TableRow>
-                ))
-              ) : filteredStockItems && filteredStockItems.length > 0 ? (
-                filteredStockItems.sort((a,b) => (a.nome > b.nome) ? 1 : -1).map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">{item.nome}</TableCell>
-                    <TableCell>{formatCurrency(item.preco)}</TableCell>
-                    <TableCell>{item.peso}</TableCell>
-                    <TableCell>{item.unidade}</TableCell>
-                    <TableCell>{formatDate(item.dataAtualizacao)}</TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => openFormForEdit(item)} aria-label="Editar item">
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(item.id)} aria-label="Remover item">
-                            <Trash2 className="h-4 w-4 text-destructive/80 hover:text-destructive" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground h-24">
-                     {searchTerm ? "Nenhum item encontrado com esse nome." : "Nenhum item no estoque. Adicione um para começar."}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i}>
+                        <TableCell colSpan={7}><Skeleton className="h-5 w-full" /></TableCell>
+                      </TableRow>
+                    ))
+                  ) : filteredStockItems && filteredStockItems.length > 0 ? (
+                    filteredStockItems.sort((a,b) => (a.nome > b.nome) ? 1 : -1).map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell className="font-medium">{item.nome}</TableCell>
+                        <TableCell>{formatCurrency(item.preco)}</TableCell>
+                        <TableCell>{item.peso}</TableCell>
+                        <TableCell>{item.unidade}</TableCell>
+                        <TableCell>{item.categoria}</TableCell>
+                        <TableCell>{formatDate(item.dataAtualizacao)}</TableCell>
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <Button variant="ghost" size="icon" onClick={() => openFormForEdit(item)} aria-label="Editar item">
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={() => handleDelete(item.id)} aria-label="Remover item">
+                                <Trash2 className="h-4 w-4 text-destructive/80 hover:text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-muted-foreground h-24">
+                         {searchTerm ? "Nenhum item encontrado com esse nome." : "Nenhum item no estoque. Adicione um para começar."}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+        </Tabs>
       </CardContent>
     </Card>
   )
