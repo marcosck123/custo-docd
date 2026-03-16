@@ -1,31 +1,13 @@
-"Erro:    x Esperava-se '</', mas foi obtido 'texto jsx (
-10:59:17
- 
-  |          )'
-10:59:17
- 
-     ,-[ /vercel/path0/src/components/recipe-calculator.tsx :614:1]
-10:59:17
- 
- 611 |     
-10:59:17
- 
- 612 |     
-10:59:17
- 
- 613 | <Button onClick={handleSaveProduct} className="w-full"><Save className="mr-2 h-4 w-4" />Salvar Produto Final</Button>
-10:59:17
- 
- 614 | , - >              </CardContent>
-10:59:17
- 
- 615 | ` - >          </Card>
-10:59:17
- 
- 616 | );
-10:59:17
- 
- 617 | };
-10:59:17
- 
-     `----"
+11:15:02.495 Failed to compile.
+11:15:02.496 Error:   [31mx[0m Expected '</', got 'jsx text (
+11:15:02.496   [31m|[0m         )'
+11:15:02.496      ,-[[36;1;4m/vercel/path0/src/components/recipe-calculator.tsx[0m:614:1]
+11:15:02.496  [2m611[0m |     
+11:15:02.496  [2m612[0m |     
+11:15:02.496  [2m613[0m |                     <Button onClick={handleSaveProduct} className="w-full"><Save className="mr-2 h-4 w-4" />Salvar Produto Final</Button>
+11:15:02.496  [2m614[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m             </CardContent>
+11:15:02.496  [2m615[0m | [35;1m`[0m[35;1m-[0m[35;1m>[0m         </Card>
+11:15:02.496  [2m616[0m |         );
+11:15:02.496  [2m617[0m |     };
+11:15:02.496      `----
+11:15:02.531 Error: Command "npm run build" exited with 1
