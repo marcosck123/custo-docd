@@ -680,8 +680,6 @@ const SavedProductsManager = () => {
             </CardContent>
         </Card>
     );
-};
-
 // --- COMPONENTE PRINCIPAL DO FLUXO ---
 export function RecipeFlow() {
   return (
