@@ -252,23 +252,53 @@ const RecipeForm = ({
 
   <div className="flex-1 space-y-2">
     <Label>Item do Estoque</Label>
-    <Select>
-      ...
+
+    <Select
+      value={selectedStockItemId}
+      onValueChange={(value) => setSelectedStockItemId(value)}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder="Selecione um ingrediente..." />
+      </SelectTrigger>
+      <SelectContent>
+        {filteredStockItems.map((item) => (
+          <SelectItem key={item.id} value={item.id}>
+            {item.nome}
+          </SelectItem>
+        ))}
+      </SelectContent>
     </Select>
 
     <div className="flex gap-2 items-end">
+
       <div className="w-32 space-y-2">
-        ...
+        <Label>Qtd. Usada</Label>
+        <Input
+          value={quantidadeUsada}
+          onChange={(e) => setQuantidadeUsada(e.target.value)}
+        />
       </div>
 
       <div className="w-24 space-y-2">
-        ...
+        <Label>Unidade</Label>
+        <select
+          value={unidade}
+          onChange={(e) => setUnidade(e.target.value)}
+          className="border rounded px-2 py-2 w-full"
+        >
+          <option value="g">g</option>
+          <option value="kg">kg</option>
+          <option value="ml">ml</option>
+          <option value="L">L</option>
+          <option value="unid">unid</option>
+        </select>
       </div>
 
       <Button type="button" onClick={handleAddIngredient}>
         <PlusCircle className="mr-2 h-4 w-4"/>
         Adicionar
       </Button>
+
     </div>
 
   </div>
