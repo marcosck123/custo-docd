@@ -17,6 +17,8 @@ import { collection, doc, serverTimestamp } from 'firebase/firestore';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import type { StockItem, RecipeIngredient, DoughRecipe, FillingRecipe, FinalProduct } from '@/lib/types';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+const [pesoMassa, setPesoMassa] = useState('');
+const [pesoRecheio, setPesoRecheio] = useState('');
 const formatCurrency = (value: number | null | undefined) => {
   if (value === null || value === undefined || isNaN(value) || !isFinite(value)) {
     return "R$ 0,00";
