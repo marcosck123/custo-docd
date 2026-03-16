@@ -249,38 +249,29 @@ const RecipeForm = ({
              </SelectContent>
 </Select>
 
-<div className="flex gap-2 items-end">
-  <div className="w-32 space-y-2">
-    <Label>Qtd. Usada</Label>
-    <Input
-      value={quantidadeUsada}
-      onChange={(e) => setQuantidadeUsada(e.target.value)}
-      placeholder="Ex: 150"
-    />
-  </div>
+<div className="flex items-end gap-2">
+  <div className="flex-1 space-y-2">
+    <Label>Item do Estoque</Label>
+    <Select>...</Select>
 
-  <div className="w-24 space-y-2">
-    <Label>Unidade</Label>
-    <select
-      value={unidade}
-      onChange={(e) => setUnidade(e.target.value)}
-      className="border rounded px-2 py-2 w-full"
-    >
-      <option value="g">g</option>
-      <option value="kg">kg</option>
-      <option value="ml">ml</option>
-      <option value="L">L</option>
-      <option value="unid">unid</option>
-    </select>
-  </div>
+    <div className="flex gap-2 items-end">
+      <div className="w-32 space-y-2">
+        ...
+      </div>
 
-  <Button type="button" onClick={handleAddIngredient}>
-    <PlusCircle className="mr-2 h-4 w-4"/>
-    Adicionar
-  </Button>
+      <div className="w-24 space-y-2">
+        ...
+      </div>
+
+      <Button type="button" onClick={handleAddIngredient}>
+        <PlusCircle className="mr-2 h-4 w-4"/>
+        Adicionar
+      </Button>
+    </div>
+
+  </div> {/* ← ESSA LINHA FALTAVA */}
+
 </div>
-
-</div>   {/* ← ESTA DIV ESTAVA FALTANDO */}
 
 <Separator />
       <div className="text-right">
