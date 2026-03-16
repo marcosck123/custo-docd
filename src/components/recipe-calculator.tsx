@@ -600,9 +600,9 @@ const custoTotal = useMemo(() => {
                     </div>
                 </div>
 
-                <Button onClick={handleSaveProduct} className="w-full">
-                    <Save className="mr-2 h-4 w-4" /> Salvar Produto Final
-                </Button>
+                  <Button onClick={handleSaveProduct} className="w-full">
+                  <Save className="mr-2 h-4 w-4" /> Salvar Produto Final
+                  </Button>
             </CardContent>
         </Card>
     );
