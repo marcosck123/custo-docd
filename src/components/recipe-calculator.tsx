@@ -66,6 +66,7 @@ const RecipeForm = ({
   const [ingredientSearch, setIngredientSearch] = useState('');
   const [isIngredientSelectOpen, setIsIngredientSelectOpen] = useState(false);
   const ingredientSearchInputRef = useRef<HTMLInputElement | null>(null);
+  const [unidade, setUnidade] = useState('g'); // 👈 ADICIONE ESTA LINHA
 
   const sortedStockItems = useMemo(() => {
     if (!stockItems) return [];
@@ -110,11 +111,12 @@ const RecipeForm = ({
       return;
     }
 
-    const newIngredient: RecipeIngredient & { custo?: number } = {
-      stockItemId: stockItem.id,
-      nome: stockItem.nome,
-      quantidadeUsada: quant,
-    };
+   const newIngredient: RecipeIngredient & { custo?: number } = {
+  stockItemId: stockItem.id,
+  nome: stockItem.nome,
+  quantidadeUsada: quant,
+  unidade: unidade
+};
     newIngredient.custo = calculateIngredientCost(newIngredient);
 
     setIngredientes([...ingredientes, newIngredient]);
@@ -188,7 +190,9 @@ const RecipeForm = ({
               <div key={index} className="flex items-center justify-between gap-2 p-2 rounded-md bg-muted/50">
                   <div>
                     <p className="font-medium">{ing.nome}</p>
-                    <p className="text-sm text-muted-foreground">{ing.quantidadeUsada}g - {formatCurrency(ing.custo)}</p>
+                   <p className="text-sm text-muted-foreground">
+  {ing.quantidadeUsada} {ing.unidade || 'g'} - {formatCurrency(ing.custo)}
+</p>
                   </div>
                   <Button variant="ghost" size="icon" type="button" onClick={() => handleRemoveIngredient(index)}>
                       <XCircle className="h-4 w-4 text-destructive" />
@@ -244,14 +248,36 @@ const RecipeForm = ({
                 )}
               </SelectContent>
             </Select>
-          </div>
-          <div className="w-32 space-y-2">
-            <Label>Qtd. Usada</Label>
-            <Input value={quantidadeUsada} onChange={(e) => setQuantidadeUsada(e.target.value)} placeholder="Ex: 150" />
-          </div>
-          <Button type="button" onClick={handleAddIngredient}><PlusCircle className="mr-2 h-4 w-4"/>Adicionar</Button>
-        </div>
-      </div>
+         <div className="flex gap-2 items-end">
+  <div className="w-32 space-y-2">
+    <Label>Qtd. Usada</Label>
+    <Input
+      value={quantidadeUsada}
+      onChange={(e) => setQuantidadeUsada(e.target.value)}
+      placeholder="Ex: 150"
+    />
+  </div>
+
+  <div className="w-24 space-y-2">
+    <Label>Unidade</Label>
+    <select
+      value={unidade}
+      onChange={(e) => setUnidade(e.target.value)}
+      className="border rounded px-2 py-2 w-full"
+    >
+      <option value="g">g</option>
+      <option value="kg">kg</option>
+      <option value="ml">ml</option>
+      <option value="L">L</option>
+      <option value="unid">unid</option>
+    </select>
+  </div>
+
+  <Button type="button" onClick={handleAddIngredient}>
+    <PlusCircle className="mr-2 h-4 w-4"/>
+    Adicionar
+  </Button>
+</div>
       
       <Separator />
 
