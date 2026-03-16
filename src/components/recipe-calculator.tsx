@@ -56,7 +56,7 @@ const RecipeForm = ({
       ? String(recipeToEdit.rendimento)
       : ''
   );
-  
+
   const [ingredientes, setIngredientes] = useState<(RecipeIngredient & { custo?: number })[]>(
     () => recipeToEdit?.ingredientes.map(ing => ({...ing, custo: calculateIngredientCost(ing)})) || []
   );
@@ -66,7 +66,6 @@ const RecipeForm = ({
   const [ingredientSearch, setIngredientSearch] = useState('');
   const [isIngredientSelectOpen, setIsIngredientSelectOpen] = useState(false);
   const ingredientSearchInputRef = useRef<HTMLInputElement | null>(null);
-  const [unidade, setUnidade] = useState('g'); // 👈 ADICIONE ESTA LINHA
 
   const sortedStockItems = useMemo(() => {
     if (!stockItems) return [];
@@ -111,12 +110,11 @@ const RecipeForm = ({
       return;
     }
 
-   const newIngredient: RecipeIngredient & { custo?: number } = {
-  stockItemId: stockItem.id,
-  nome: stockItem.nome,
-  quantidadeUsada: quant,
-  unidade: unidade
-};
+    const newIngredient: RecipeIngredient & { custo?: number } = {
+      stockItemId: stockItem.id,
+      nome: stockItem.nome,
+      quantidadeUsada: quant,
+    };
     newIngredient.custo = calculateIngredientCost(newIngredient);
 
     setIngredientes([...ingredientes, newIngredient]);
@@ -124,7 +122,7 @@ const RecipeForm = ({
     setQuantidadeUsada('');
     setIngredientSearch('');
   };
-  
+
   const handleRemoveIngredient = (index: number) => {
     setIngredientes(ingredientes.filter((_, i) => i !== index));
   };
@@ -190,9 +188,7 @@ const RecipeForm = ({
               <div key={index} className="flex items-center justify-between gap-2 p-2 rounded-md bg-muted/50">
                   <div>
                     <p className="font-medium">{ing.nome}</p>
-                   <p className="text-sm text-muted-foreground">
-  {ing.quantidadeUsada} {ing.unidade || 'g'} - {formatCurrency(ing.custo)}
-</p>
+                    <p className="text-sm text-muted-foreground">{ing.quantidadeUsada}g - {formatCurrency(ing.custo)}</p>
                   </div>
                   <Button variant="ghost" size="icon" type="button" onClick={() => handleRemoveIngredient(index)}>
                       <XCircle className="h-4 w-4 text-destructive" />
@@ -246,66 +242,19 @@ const RecipeForm = ({
                 ) : (
                   <SelectItem value="empty-stock-items" disabled>Nenhum ingrediente disponível.</SelectItem>
                 )}
-             </SelectContent>
-</Select>
-<div className="flex items-end gap-2">
-
-  <div className="flex-1 space-y-2">
-    <Label>Item do Estoque</Label>
-
-    <Select
-      value={selectedStockItemId}
-      onValueChange={(value) => setSelectedStockItemId(value)}
-    >
-      <SelectTrigger>
-        <SelectValue placeholder="Selecione um ingrediente..." />
-      </SelectTrigger>
-      <SelectContent>
-        {filteredStockItems.map((item) => (
-          <SelectItem key={item.id} value={item.id}>
-            {item.nome}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-
-    <div className="flex gap-2 items-end">
-
-      <div className="w-32 space-y-2">
-        <Label>Qtd. Usada</Label>
-        <Input
-          value={quantidadeUsada}
-          onChange={(e) => setQuantidadeUsada(e.target.value)}
-        />
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="w-32 space-y-2">
+            <Label>Qtd. Usada</Label>
+            <Input value={quantidadeUsada} onChange={(e) => setQuantidadeUsada(e.target.value)} placeholder="Ex: 150" />
+          </div>
+          <Button type="button" onClick={handleAddIngredient}><PlusCircle className="mr-2 h-4 w-4"/>Adicionar</Button>
+        </div>
       </div>
 
-      <div className="w-24 space-y-2">
-        <Label>Unidade</Label>
-        <select
-          value={unidade}
-          onChange={(e) => setUnidade(e.target.value)}
-          className="border rounded px-2 py-2 w-full"
-        >
-          <option value="g">g</option>
-          <option value="kg">kg</option>
-          <option value="ml">ml</option>
-          <option value="L">L</option>
-          <option value="unid">unid</option>
-        </select>
-      </div>
+      <Separator />
 
-      <Button type="button" onClick={handleAddIngredient}>
-        <PlusCircle className="mr-2 h-4 w-4"/>
-        Adicionar
-      </Button>
-
-    </div>
-
-  </div>
-
-</div>
-
-<Separator />
       <div className="text-right">
         <p className="text-muted-foreground">Custo Total da Receita</p>
         <p className="text-2xl font-bold">{formatCurrency(custoTotal)}</p>
@@ -323,7 +272,7 @@ const RecipeForm = ({
 const RecipeManager = ({ recipeType, title, description, collectionName }: { recipeType: 'dough' | 'filling', title: string, description: string, collectionName: string }) => {
     const { toast } = useToast();
     const firestore = useFirestore();
-    
+
     // State & Data
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingRecipe, setEditingRecipe] = useState<DoughRecipe | FillingRecipe | null>(null);
@@ -334,7 +283,7 @@ const RecipeManager = ({ recipeType, title, description, collectionName }: { rec
 
     const recipesQuery = useMemoFirebase(() => firestore ? collection(firestore, collectionName) : null, [firestore, collectionName]);
     const { data: recipes, isLoading: isLoadingRecipes } = useCollection<DoughRecipe | FillingRecipe>(recipesQuery);
-    
+
     const stockQuery = useMemoFirebase(() => firestore ? collection(firestore, 'estoque') : null, [firestore]);
     const { data: stockItems, isLoading: isLoadingStock } = useCollection<StockItem>(stockQuery);
 
@@ -363,12 +312,12 @@ const RecipeManager = ({ recipeType, title, description, collectionName }: { rec
         setEditingRecipe(recipe);
         setIsFormOpen(true);
     }
-    
+
     const openFormForNew = () => {
         setEditingRecipe(null);
         setIsFormOpen(true);
     }
-    
+
     return (
         <Card>
             <CardHeader>
@@ -461,14 +410,14 @@ const RecipeManager = ({ recipeType, title, description, collectionName }: { rec
 const FinalProductManager = () => {
     const { toast } = useToast();
     const firestore = useFirestore();
-    
+
     // Data
     const doughRecipesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'receitas_massa') : null, [firestore]);
     const { data: doughRecipes, isLoading: isLoadingDough } = useCollection<DoughRecipe>(doughRecipesQuery);
-    
+
     const fillingRecipesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'receitas_recheio') : null, [firestore]);
     const { data: fillingRecipes, isLoading: isLoadingFilling } = useCollection<FillingRecipe>(fillingRecipesQuery);
-    
+
     // Form State
     const [nome, setNome] = useState('');
     const [massaId, setMassaId] = useState<string | undefined>(undefined);
@@ -478,7 +427,7 @@ const FinalProductManager = () => {
     const [quantidadeFinal, setQuantidadeFinal] = useState('1');
     const [materialPercentage, setMaterialPercentage] = useState('0');
     const [consumoPercentage, setConsumoPercentage] = useState('0');
-    
+
    // Calculations
 const selectedDough = useMemo(() => doughRecipes?.find(r => r.id === massaId), [doughRecipes, massaId]);
 const selectedFilling = useMemo(() => fillingRecipes?.find(r => r.id === recheioId), [fillingRecipes, recheioId]);
@@ -500,7 +449,7 @@ const custoUnitario = useMemo(() => {
 
     // 3. Soma os custos base
     const baseUnitCost = custoMassaFinal + custoRecheioFinal;
-    
+
     // 4. Aplica as porcentagens
     const matPercentage = parseFloat(materialPercentage.replace(',', '.')) || 0;
     const consPercentage = parseFloat(consumoPercentage.replace(',', '.')) || 0;
@@ -663,7 +612,7 @@ const custoTotal = useMemo(() => {
 const SavedProductsManager = () => {
     const firestore = useFirestore();
     const { toast } = useToast();
-    
+
     const productsQuery = useMemoFirebase(() => firestore ? collection(firestore, 'produtos_finais') : null, [firestore]);
     const { data: products, isLoading } = useCollection<FinalProduct>(productsQuery);
 
@@ -730,6 +679,7 @@ const SavedProductsManager = () => {
                     </Table>
                 </div>
             </CardContent>
+        </Card>
            </Card>
     );
 }
