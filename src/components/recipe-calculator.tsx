@@ -424,62 +424,50 @@ const FinalProductManager = () => {
     const [nome, setNome] = useState('');
     const [massaId, setMassaId] = useState<string | undefined>(undefined);
     const [recheioId, setRecheioId] = useState<string | undefined>(undefined);
+    const [pesoMassa, setPesoMassa] = useState('');
+    const [pesoRecheio, setPesoRecheio] = useState('');
     const [quantidadeFinal, setQuantidadeFinal] = useState('1');
     const [materialPercentage, setMaterialPercentage] = useState('0');
     const [consumoPercentage, setConsumoPercentage] = useState('0');
-    const [pesoMassa, setPesoMassa] = useState('');
-    const [pesoRecheio, setPesoRecheio] = useState('');
-
     
-    // Calculations
-    const selectedDough = useMemo(() => doughRecipes?.find(r => r.id === massaId), [doughRecipes, massaId]);
-    const selectedFilling = useMemo(() => fillingRecipes?.find(r => r.id === recheioId), [fillingRecipes, recheioId]);
+   // Calculations
+const selectedDough = useMemo(() => doughRecipes?.find(r => r.id === massaId), [doughRecipes, massaId]);
+const selectedFilling = useMemo(() => fillingRecipes?.find(r => r.id === recheioId), [fillingRecipes, recheioId]);
 
-    const custoUnitario = useMemo(() => {
-        if (!selectedDough || !selectedDough.rendimento || selectedDough.rendimento <= 0) {
-            return 0;
-        }
+const custoUnitario = useMemo(() => {
+    // 1. Cálculo da Massa
+    const custoMassaPorGrama = (selectedDough && selectedDough.rendimento > 0) 
+        ? (selectedDough.custoTotal / selectedDough.rendimento) 
+        : 0;
+    const pesoM = parseFloat(pesoMassa.replace(',', '.')) || 0;
+    const custoMassaFinal = custoMassaPorGrama * pesoM;
 
-          // Cálculos Atualizados para Peso (g)
-    const selectedDough = useMemo(() => doughRecipes?.find(r => r.id === massaId), [doughRecipes, massaId]);
-    const selectedFilling = useMemo(() => fillingRecipes?.find(r => r.id === recheioId), [fillingRecipes, recheioId]);
+    // 2. Cálculo do Recheio
+    const custoRecheioPorGrama = (selectedFilling && selectedFilling.rendimento > 0) 
+        ? (selectedFilling.custoTotal / selectedFilling.rendimento) 
+        : 0;
+    const pesoR = parseFloat(pesoRecheio.replace(',', '.')) || 0;
+    const custoRecheioFinal = custoRecheioPorGrama * pesoR;
 
-    const custoUnitario = useMemo(() => {
-        // 1. Cálculo da Massa: (Custo Total da Receita / Peso Total da Receita) * Gramas usadas no doce
-        const custoMassaPorGrama = (selectedDough && selectedDough.rendimento > 0) 
-            ? (selectedDough.custoTotal / selectedDough.rendimento) 
-            : 0;
-        const pesoM = parseFloat(pesoMassa.replace(',', '.')) || 0;
-        const custoMassaFinal = custoMassaPorGrama * pesoM;
-
-        // 2. Cálculo do Recheio: (Custo Total da Receita / Peso Total da Receita) * Gramas usadas no doce
-        const custoRecheioPorGrama = (selectedFilling && selectedFilling.rendimento > 0) 
-            ? (selectedFilling.custoTotal / selectedFilling.rendimento) 
-            : 0;
-        const pesoR = parseFloat(pesoRecheio.replace(',', '.')) || 0;
-        const custoRecheioFinal = custoRecheioPorGrama * pesoR;
-
-        // 3. Soma os custos base (Massa + Recheio)
-        const baseUnitCost = custoMassaFinal + custoRecheioFinal;
-        
-        // 4. Aplica as porcentagens de Material e Consumo
-        const matPercentage = parseFloat(materialPercentage.replace(',', '.')) || 0;
-        const consPercentage = parseFloat(consumoPercentage.replace(',', '.')) || 0;
-
-        const materialCost = baseUnitCost * (matPercentage / 100);
-        const consumoCost = baseUnitCost * (consPercentage / 100);
-
-        // Retorna o custo de UMA unidade do produto montado
-        return baseUnitCost + materialCost + consumoCost;
-    }, [selectedDough, selectedFilling, pesoMassa, pesoRecheio, materialPercentage, consumoPercentage]);
-
-    const custoTotal = useMemo(() => {
-        const quant = parseFloat(quantidadeFinal);
-        if (!custoUnitario || !quant || quant <= 0) return 0;
-        // Multiplica o custo de uma unidade pela quantidade total que você vai produzir
-        return custoUnitario * quant;
-    }, [custoUnitario, quantidadeFinal]);
+    // 3. Soma os custos base
+    const baseUnitCost = custoMassaFinal + custoRecheioFinal;
     
+    // 4. Aplica as porcentagens
+    const matPercentage = parseFloat(materialPercentage.replace(',', '.')) || 0;
+    const consPercentage = parseFloat(consumoPercentage.replace(',', '.')) || 0;
+
+    const materialCost = baseUnitCost * (matPercentage / 100);
+    const consumoCost = baseUnitCost * (consPercentage / 100);
+
+    return baseUnitCost + materialCost + consumoCost;
+}, [selectedDough, selectedFilling, pesoMassa, pesoRecheio, materialPercentage, consumoPercentage]);
+
+const custoTotal = useMemo(() => {
+    const quant = parseFloat(quantidadeFinal);
+    if (!custoUnitario || !quant || quant <= 0) return 0;
+    return custoUnitario * quant;
+}, [custoUnitario, quantidadeFinal]);
+
     // Handlers
     const handleSaveProduct = () => {
         if (!firestore || !nome || !massaId || !selectedDough) {
