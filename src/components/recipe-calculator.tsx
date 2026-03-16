@@ -680,7 +680,6 @@ const SavedProductsManager = () => {
                 </div>
             </CardContent>
         </Card>
-           </Card>
     );
 }
 
