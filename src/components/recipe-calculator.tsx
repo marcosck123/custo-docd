@@ -158,7 +158,7 @@ const RecipeForm = ({
      <div className="space-y-2">
   <Label htmlFor="recipe-yield">Peso Final da Receita (g)</Label>
   <Input 
-    id="recipe-yield" 
+    id="recipe-name" 
     type="number" 
     value={rendimento} 
     onChange={(e) => setRendimento(e.target.value)} 
