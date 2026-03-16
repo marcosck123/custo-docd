@@ -17,8 +17,6 @@ import { collection, doc, serverTimestamp } from 'firebase/firestore';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import type { StockItem, RecipeIngredient, DoughRecipe, FillingRecipe, FinalProduct } from '@/lib/types';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-const [pesoMassa, setPesoMassa] = useState('');
-const [pesoRecheio, setPesoRecheio] = useState('');
 const formatCurrency = (value: number | null | undefined) => {
   if (value === null || value === undefined || isNaN(value) || !isFinite(value)) {
     return "R$ 0,00";
@@ -505,117 +503,109 @@ const custoTotal = useMemo(() => {
     };
 
     return (
-        <Card>
+        <Card className="bg-background/50 border-primary/20">
             <CardHeader>
                 <CardTitle>Produto Final</CardTitle>
                 <CardDescription>Monte seu produto com base nas receitas para calcular o custo unitário.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+                {/* Nome do Produto */}
                 <div className="space-y-2">
                     <Label htmlFor="product-name">Nome do Produto Final</Label>
-                    <Input id="product-name" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Bolo no pote Ninho com Brigadeiro" />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-    {/* COLUNA DA MASSA */}
-    <div className="space-y-4">
-        <div className="space-y-2">
-            <Label>Receita da Massa</Label>
-            <Select value={massaId} onValueChange={setMassaId}>
-                <SelectTrigger><SelectValue placeholder="Selecione a massa..." /></SelectTrigger>
-                <SelectContent>
-                    {isLoadingDough ? <SelectItem value="loading" disabled>Carregando...</SelectItem> :
-                     doughRecipes?.map(r => <SelectItem key={r.id} value={r.id}>{r.nome}</SelectItem>)}
-                </SelectContent>
-            </Select>
-        </div>
-        {/* Campo de Peso da Massa */}
-        <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">Qtd. de Massa por Unidade (g)</Label>
-            <Input 
-                type="number" 
-                placeholder="Ex: 100" 
-                value={pesoMassa} 
-                onChange={(e) => setPesoMassa(e.target.value)} 
-            />
-        </div>
-    </div>
+                    <Input 
+                        id="product-name" 
+                        value={nome} 
+                        onChange={(e) => setNome(e.target.value)} 
+                        placeholder="Ex: Bolo no pote Ninho com Brigadeiro" 
+                    />
+                </div>
 
-    {/* COLUNA DO RECHEIO */}
-    <div className="space-y-4">
-        <div className="space-y-2">
-            <Label>Receita do Recheio (Opcional)</Label>
-            <Select value={recheioId} onValueChange={setRecheioId}>
-                <SelectTrigger><SelectValue placeholder="Selecione o recheio..." /></SelectTrigger>
-                <SelectContent>
-                    <SelectItem value="none">Nenhum recheio</SelectItem>
-                    {isLoadingFilling ? <SelectItem value="loading-filling" disabled>Carregando...</SelectItem> :
-                     fillingRecipes?.map(r => <SelectItem key={r.id} value={r.id}>{r.nome}</SelectItem>)}
-                </SelectContent>
-            </Select>
-        </div>
-        {/* Campo de Peso do Recheio */}
-        <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">Qtd. de Recheio por Unidade (g)</Label>
-            <Input 
-                type="number" 
-                placeholder="Ex: 50" 
-                value={pesoRecheio} 
-                onChange={(e) => setPesoRecheio(e.target.value)} 
-                disabled={recheioId === 'none' || !recheioId}
-            />
-        </div>
-    </div>
-</div>
+                {/* Seleção de Receitas e Pesos */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label>Receita da Massa</Label>
+                            <Select value={massaId} onValueChange={setMassaId}>
+                                <SelectTrigger><SelectValue placeholder="Selecione a massa..." /></SelectTrigger>
+                                <SelectContent>
+                                    {isLoadingDough ? <SelectItem value="loading" disabled>Carregando...</SelectItem> :
+                                     doughRecipes?.map(r => <SelectItem key={r.id} value={r.id}>{r.nome}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-xs text-muted-foreground">Qtd. de Massa por Unidade (g)</Label>
+                            <Input 
+                                type="number" 
+                                placeholder="Ex: 100" 
+                                value={pesoMassa} 
+                                onChange={(e) => setPesoMassa(e.target.value)} 
+                            />
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label>Receita do Recheio (Opcional)</Label>
+                            <Select value={recheioId} onValueChange={setRecheioId}>
+                                <SelectTrigger><SelectValue placeholder="Selecione o recheio..." /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="none">Nenhum recheio</SelectItem>
+                                    {isLoadingFilling ? <SelectItem value="loading-filling" disabled>Carregando...</SelectItem> :
+                                     fillingRecipes?.map(r => <SelectItem key={r.id} value={r.id}>{r.nome}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-xs text-muted-foreground">Qtd. de Recheio por Unidade (g)</Label>
+                            <Input 
+                                type="number" 
+                                placeholder="Ex: 50" 
+                                value={pesoRecheio} 
+                                onChange={(e) => setPesoRecheio(e.target.value)} 
+                                disabled={recheioId === 'none' || !recheioId} 
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Porcentagens Adicionais */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                        <Label htmlFor="material-percentage">Adicional de Material (%)</Label>
-                        <Input 
-                            id="material-percentage"
-                            type="number"
-                            value={materialPercentage} 
-                            onChange={e => setMaterialPercentage(e.target.value)} 
-                            placeholder="Ex: 10"
-                        />
-                        <p className="text-xs text-muted-foreground">Para embalagens, adesivos, etc.</p>
+                        <Label>Adicional de Material (%)</Label>
+                        <Input type="number" value={materialPercentage} onChange={e => setMaterialPercentage(e.target.value)} placeholder="0" />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="consumo-percentage">Adicional de Consumo (%)</Label>
-                        <Input 
-                            id="consumo-percentage"
-                            type="number"
-                            value={consumoPercentage} 
-                            onChange={e => setConsumoPercentage(e.target.value)} 
-                            placeholder="Ex: 5"
-                        />
-                        <p className="text-xs text-muted-foreground">Para gás, energia elétrica, etc.</p>
+                        <Label>Adicional de Consumo (%)</Label>
+                        <Input type="number" value={consumoPercentage} onChange={e => setConsumoPercentage(e.target.value)} placeholder="0" />
                     </div>
                 </div>
 
                 <Separator />
 
-                <div className="bg-muted/50 p-4 rounded-lg text-center">
-                    <p className="text-sm font-medium text-primary">Custo por Unidade</p>
-                    <p className="text-3xl font-bold">{formatCurrency(custoUnitario)}</p>
-                    <p className="text-xs text-muted-foreground mt-1">Este é o custo de produção para uma única unidade do seu produto final.</p>
+                {/* Resumo de Preços */}
+                <div className="p-4 bg-primary/5 rounded-lg text-center space-y-1">
+                    <p className="text-sm text-muted-foreground italic">Custo por Unidade</p>
+                    <h2 className="text-3xl font-bold text-primary">{formatCurrency(custoUnitario)}</h2>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                        <Label htmlFor="final-yield">Quantidade a Produzir</Label>
-                        <Input id="final-yield" type="number" value={quantidadeFinal} onChange={e => setQuantidadeFinal(e.target.value)} placeholder="Ex: 12" />
+                        <Label>Quantidade a Produzir</Label>
+                        <Input type="number" value={quantidadeFinal} onChange={e => setQuantidadeFinal(e.target.value)} />
                     </div>
-                    <div className="bg-muted/50 p-4 rounded-lg text-center">
-                        <p className="text-sm font-medium">Custo Total da Produção</p>
+                    <div className="space-y-2 flex flex-col justify-end text-right">
+                        <p className="text-sm text-muted-foreground italic">Custo Total da Produção</p>
                         <p className="text-2xl font-bold">{formatCurrency(custoTotal)}</p>
                     </div>
                 </div>
 
-
-                <Button onClick={handleSaveProduct} className="w-full"><Save className="mr-2 h-4 w-4" />Salvar Produto Final</Button>
+                <Button onClick={handleSaveProduct} className="w-full">
+                    <Save className="mr-2 h-4 w-4" /> Salvar Produto Final
+                </Button>
             </CardContent>
         </Card>
     );
-};
-
 
 // --- GERENCIADOR DE PRODUTOS SALVOS ---
 const SavedProductsManager = () => {
