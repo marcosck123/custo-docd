@@ -248,11 +248,13 @@ const RecipeForm = ({
                 )}
              </SelectContent>
 </Select>
-
 <div className="flex items-end gap-2">
+
   <div className="flex-1 space-y-2">
     <Label>Item do Estoque</Label>
-    <Select>...</Select>
+    <Select>
+      ...
+    </Select>
 
     <div className="flex gap-2 items-end">
       <div className="w-32 space-y-2">
@@ -269,7 +271,7 @@ const RecipeForm = ({
       </Button>
     </div>
 
-  </div> {/* ← ESSA LINHA FALTAVA */}
+  </div>
 
 </div>
 
