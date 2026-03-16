@@ -425,6 +425,9 @@ const FinalProductManager = () => {
     const [quantidadeFinal, setQuantidadeFinal] = useState('1');
     const [materialPercentage, setMaterialPercentage] = useState('0');
     const [consumoPercentage, setConsumoPercentage] = useState('0');
+    const [pesoMassa, setPesoMassa] = useState('');
+    const [pesoRecheio, setPesoRecheio] = useState('');
+
     
     // Calculations
     const selectedDough = useMemo(() => doughRecipes?.find(r => r.id === massaId), [doughRecipes, massaId]);
@@ -435,27 +438,43 @@ const FinalProductManager = () => {
             return 0;
         }
 
-        const doughUnitCost = selectedDough.custoTotal / selectedDough.rendimento;
-        
-        let fillingUnitCost = 0;
-        if (selectedFilling && 'rendimento' in selectedFilling && selectedFilling.rendimento && selectedFilling.rendimento > 0) {
-            fillingUnitCost = selectedFilling.custoTotal / selectedFilling.rendimento;
-        }
+          // Cálculos Atualizados para Peso (g)
+    const selectedDough = useMemo(() => doughRecipes?.find(r => r.id === massaId), [doughRecipes, massaId]);
+    const selectedFilling = useMemo(() => fillingRecipes?.find(r => r.id === recheioId), [fillingRecipes, recheioId]);
 
-        const baseUnitCost = doughUnitCost + fillingUnitCost;
+    const custoUnitario = useMemo(() => {
+        // 1. Cálculo da Massa: (Custo Total da Receita / Peso Total da Receita) * Gramas usadas no doce
+        const custoMassaPorGrama = (selectedDough && selectedDough.rendimento > 0) 
+            ? (selectedDough.custoTotal / selectedDough.rendimento) 
+            : 0;
+        const pesoM = parseFloat(pesoMassa.replace(',', '.')) || 0;
+        const custoMassaFinal = custoMassaPorGrama * pesoM;
+
+        // 2. Cálculo do Recheio: (Custo Total da Receita / Peso Total da Receita) * Gramas usadas no doce
+        const custoRecheioPorGrama = (selectedFilling && selectedFilling.rendimento > 0) 
+            ? (selectedFilling.custoTotal / selectedFilling.rendimento) 
+            : 0;
+        const pesoR = parseFloat(pesoRecheio.replace(',', '.')) || 0;
+        const custoRecheioFinal = custoRecheioPorGrama * pesoR;
+
+        // 3. Soma os custos base (Massa + Recheio)
+        const baseUnitCost = custoMassaFinal + custoRecheioFinal;
         
+        // 4. Aplica as porcentagens de Material e Consumo
         const matPercentage = parseFloat(materialPercentage.replace(',', '.')) || 0;
         const consPercentage = parseFloat(consumoPercentage.replace(',', '.')) || 0;
 
         const materialCost = baseUnitCost * (matPercentage / 100);
         const consumoCost = baseUnitCost * (consPercentage / 100);
 
+        // Retorna o custo de UMA unidade do produto montado
         return baseUnitCost + materialCost + consumoCost;
-    }, [selectedDough, selectedFilling, materialPercentage, consumoPercentage]);
+    }, [selectedDough, selectedFilling, pesoMassa, pesoRecheio, materialPercentage, consumoPercentage]);
 
     const custoTotal = useMemo(() => {
         const quant = parseFloat(quantidadeFinal);
         if (!custoUnitario || !quant || quant <= 0) return 0;
+        // Multiplica o custo de uma unidade pela quantidade total que você vai produzir
         return custoUnitario * quant;
     }, [custoUnitario, quantidadeFinal]);
     
@@ -505,32 +524,57 @@ const FinalProductManager = () => {
                 <div className="space-y-2">
                     <Label htmlFor="product-name">Nome do Produto Final</Label>
                     <Input id="product-name" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Bolo no pote Ninho com Brigadeiro" />
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                        <Label>Receita da Massa</Label>
-                        <Select value={massaId} onValueChange={setMassaId}>
-                            <SelectTrigger><SelectValue placeholder="Selecione a massa..." /></SelectTrigger>
-                            <SelectContent>
-                                {isLoadingDough ? <SelectItem value="loading" disabled>Carregando...</SelectItem> :
-                                 doughRecipes?.map(r => <SelectItem key={r.id} value={r.id}>{r.nome}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                     <div className="space-y-2">
-                        <Label>Receita do Recheio (Opcional)</Label>
-                        <Select value={recheioId} onValueChange={setRecheioId}>
-                            <SelectTrigger><SelectValue placeholder="Selecione o recheio..." /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="none">Nenhum recheio</SelectItem>
-                                {isLoadingFilling ? <SelectItem value="loading-filling" disabled>Carregando...</SelectItem> :
-                                 fillingRecipes?.map(r => <SelectItem key={r.id} value={r.id}>{r.nome}</SelectItem>)}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {/* COLUNA DA MASSA */}
+    <div className="space-y-4">
+        <div className="space-y-2">
+            <Label>Receita da Massa</Label>
+            <Select value={massaId} onValueChange={setMassaId}>
+                <SelectTrigger><SelectValue placeholder="Selecione a massa..." /></SelectTrigger>
+                <SelectContent>
+                    {isLoadingDough ? <SelectItem value="loading" disabled>Carregando...</SelectItem> :
+                     doughRecipes?.map(r => <SelectItem key={r.id} value={r.id}>{r.nome}</SelectItem>)}
+                </SelectContent>
+            </Select>
+        </div>
+        {/* Campo de Peso da Massa */}
+        <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">Qtd. de Massa por Unidade (g)</Label>
+            <Input 
+                type="number" 
+                placeholder="Ex: 100" 
+                value={pesoMassa} 
+                onChange={(e) => setPesoMassa(e.target.value)} 
+            />
+        </div>
+    </div>
 
+    {/* COLUNA DO RECHEIO */}
+    <div className="space-y-4">
+        <div className="space-y-2">
+            <Label>Receita do Recheio (Opcional)</Label>
+            <Select value={recheioId} onValueChange={setRecheioId}>
+                <SelectTrigger><SelectValue placeholder="Selecione o recheio..." /></SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="none">Nenhum recheio</SelectItem>
+                    {isLoadingFilling ? <SelectItem value="loading-filling" disabled>Carregando...</SelectItem> :
+                     fillingRecipes?.map(r => <SelectItem key={r.id} value={r.id}>{r.nome}</SelectItem>)}
+                </SelectContent>
+            </Select>
+        </div>
+        {/* Campo de Peso do Recheio */}
+        <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">Qtd. de Recheio por Unidade (g)</Label>
+            <Input 
+                type="number" 
+                placeholder="Ex: 50" 
+                value={pesoRecheio} 
+                onChange={(e) => setPesoRecheio(e.target.value)} 
+                disabled={recheioId === 'none' || !recheioId}
+            />
+        </div>
+    </div>
+</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                         <Label htmlFor="material-percentage">Adicional de Material (%)</Label>
