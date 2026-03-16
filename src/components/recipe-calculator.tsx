@@ -606,6 +606,7 @@ const custoTotal = useMemo(() => {
             </CardContent>
         </Card>
     );
+}
 
 // --- GERENCIADOR DE PRODUTOS SALVOS ---
 const SavedProductsManager = () => {
