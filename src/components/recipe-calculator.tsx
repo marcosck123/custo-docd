@@ -155,14 +155,28 @@ const RecipeForm = ({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-4">
-   <div className="space-y-2">
-        <Label htmlFor="recipe-name">Nome da Receita</Label>
-        <Input id="recipe-name" value={nome} onChange={(e) => setNome(e.target.value)} placeholder={recipeType === 'dough' ? "Ex: Massa de Brownie" : "Ex: Recheio de Ninho"} />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="recipe-yield">Rendimento (unidades/porções)</Label>
-        <Input id="recipe-yield" type="number" value={rendimento} onChange={(e) => setRendimento(e.target.value)} placeholder="Ex: 10" />
-      </div>
+  {/* Adicione este bloco aqui para recuperar o nome */}
+<div className="space-y-2">
+  <Label htmlFor="recipe-name">Nome da Receita</Label>
+  <Input 
+    id="recipe-name" 
+    value={nome} 
+    onChange={(e) => setNome(e.target.value)} 
+    placeholder={recipeType === 'dough' ? "Ex: Massa de Brownie" : "Ex: Recheio de Ninho"} 
+  />
+</div>
+
+{/* O seu campo de Peso Final deve ficar logo abaixo dele */}
+<div className="space-y-2">
+  <Label htmlFor="recipe-yield">Peso Final da Receita (g)</Label>
+  <Input 
+    id="recipe-yield" 
+    type="number" 
+    value={rendimento} 
+    onChange={(e) => setRendimento(e.target.value)} 
+    placeholder="Ex: 1200" 
+  />
+</div>
 
       <Separator />
 
