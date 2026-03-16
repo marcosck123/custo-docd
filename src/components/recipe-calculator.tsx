@@ -156,6 +156,7 @@ const RecipeForm = ({
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-h-[70vh] overflow-y-auto pr-4">
      <div className="space-y-2">
+  <Label htmlFor="recipe-name">Nome da Receita</Label>
   <Label htmlFor="recipe-yield">Peso Final da Receita (g)</Label>
   <Input 
     id="recipe-name" 
