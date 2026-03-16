@@ -1,13 +1,47 @@
-11:15:02.495 Failed to compile.
-11:15:02.496 Error:   [31mx[0m Expected '</', got 'jsx text (
-11:15:02.496   [31m|[0m         )'
-11:15:02.496      ,-[[36;1;4m/vercel/path0/src/components/recipe-calculator.tsx[0m:614:1]
-11:15:02.496  [2m611[0m |     
-11:15:02.496  [2m612[0m |     
-11:15:02.496  [2m613[0m |                     <Button onClick={handleSaveProduct} className="w-full"><Save className="mr-2 h-4 w-4" />Salvar Produto Final</Button>
-11:15:02.496  [2m614[0m | [35;1m,[0m[35;1m-[0m[35;1m>[0m             </CardContent>
-11:15:02.496  [2m615[0m | [35;1m`[0m[35;1m-[0m[35;1m>[0m         </Card>
-11:15:02.496  [2m616[0m |         );
-11:15:02.496  [2m617[0m |     };
-11:15:02.496      `----
-11:15:02.531 Error: Command "npm run build" exited with 1
+14:21:51.507 Running build in Washington, D.C., USA (East) – iad1
+14:21:51.507 Build machine configuration: 2 cores, 8 GB
+14:21:51.651 Cloning github.com/marcosck123/custo-docd (Branch: main, Commit: 63e998b)
+14:21:52.022 Cloning completed: 371.000ms
+14:21:53.594 Restored build cache from previous deployment (Af8S3y7nfYb2BJxeRoHFGQP6kExb)
+14:21:53.864 Running "vercel build"
+14:21:54.464 Vercel CLI 50.32.4
+14:21:54.785 Installing dependencies...
+14:21:56.486 
+14:21:56.486 up to date in 1s
+14:21:56.487 
+14:21:56.487 112 packages are looking for funding
+14:21:56.487   run `npm fund` for details
+14:21:56.521 Detected Next.js version: 15.5.9
+14:21:56.529 Running "npm run build"
+14:21:56.624 
+14:21:56.624 > nextn@0.1.0 build
+14:21:56.625 > NODE_ENV=production next build
+14:21:56.625 
+14:21:57.790    ▲ Next.js 15.5.9
+14:21:57.791 
+14:21:57.819    Creating an optimized production build ...
+14:22:02.551 Failed to compile.
+14:22:02.552 
+14:22:02.552 ./src/components/recipe-calculator.tsx
+14:22:02.553 Error:   [31mx[0m 'import', and 'export' cannot be used outside of module code
+14:22:02.553      ,-[[36;1;4m/vercel/path0/src/components/recipe-calculator.tsx[0m:686:1]
+14:22:02.553  [2m683[0m | };
+14:22:02.553  [2m684[0m | 
+14:22:02.554  [2m685[0m | // --- COMPONENTE PRINCIPAL DO FLUXO ---
+14:22:02.554  [2m686[0m | export function RecipeFlow() {
+14:22:02.554      : [35;1m^^^^^^[0m
+14:22:02.554  [2m687[0m |   return (
+14:22:02.555  [2m688[0m |     <Tabs defaultValue="creator" className="w-full">
+14:22:02.555  [2m689[0m |       <TabsList className="grid w-full grid-cols-2">
+14:22:02.555      `----
+14:22:02.555 
+14:22:02.556 Caused by:
+14:22:02.556     Syntax Error
+14:22:02.556 
+14:22:02.556 Import trace for requested module:
+14:22:02.557 ./src/components/recipe-calculator.tsx
+14:22:02.557 ./src/app/page.tsx
+14:22:02.557 
+14:22:02.558 
+14:22:02.558 > Build failed because of webpack errors
+14:22:02.587 Error: Command "npm run build" exited with 1
