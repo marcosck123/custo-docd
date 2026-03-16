@@ -246,9 +246,10 @@ const RecipeForm = ({
                 ) : (
                   <SelectItem value="empty-stock-items" disabled>Nenhum ingrediente disponível.</SelectItem>
                 )}
-              </SelectContent>
-            </Select>
-         <div className="flex gap-2 items-end">
+             </SelectContent>
+</Select>
+
+<div className="flex gap-2 items-end">
   <div className="w-32 space-y-2">
     <Label>Qtd. Usada</Label>
     <Input
@@ -278,9 +279,10 @@ const RecipeForm = ({
     Adicionar
   </Button>
 </div>
-      
-      <Separator />
 
+</div>   {/* ← ESTA DIV ESTAVA FALTANDO */}
+
+<Separator />
       <div className="text-right">
         <p className="text-muted-foreground">Custo Total da Receita</p>
         <p className="text-2xl font-bold">{formatCurrency(custoTotal)}</p>
