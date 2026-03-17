@@ -1,16 +1,15 @@
 import type { Timestamp } from 'firebase/firestore';
 
 // From /estoque
+export type Unidade = 'MG' | 'G' | 'KG' | 'ML' | 'L' | 'UN';
+
 export type StockItem = {
   id: string;
   nome: string;
   preco: number;
   peso: number;
-  unidade: string;
-  categoria: 'Ingrediente' | 'Material' | 'Consumo';
-  dataAtualizacao?: Timestamp;
+  unidade: Unidade; // 👈 ADICIONA ISSO
 };
-
 // Embedded in recipes
 export type RecipeIngredient = {
   stockItemId: string;
