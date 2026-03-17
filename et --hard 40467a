@@ -1,0 +1,44 @@
+[33m772206b[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Update recipe-calculator.tsx
+[33m0afd1cc[m Update recipe-calculator.tsx
+[33m8f78872[m Update recipe-calculator.tsx
+[33me87a572[m Update recipe-calculator.tsx
+[33mfac48f1[m Update recipe-calculator.tsx
+[33m95ca14c[m Update recipe-calculator.tsx
+[33m9067a6c[m Update recipe-calculator.tsx
+[33mb473c08[m Update recipe-calculator.tsx
+[33m71a69ac[m Fix compilation errors in recipe-calculator.tsx
+[33m63e998b[m Update recipe-calculator.tsx
+[33m11f6d95[m Resolve JSX syntax errors in recipe-calculator.tsx
+[33mb189df0[m Improve layout and input handling in recipe calculator
+[33m4562fa0[m Create Erros
+[33m1302111[m Update recipe-calculator.tsx
+[33md785501[m Update recipe-calculator.tsx
+[33m604ce29[m Update recipe-calculator.tsx
+[33m7212e1e[m Add final weight input field to recipe calculator
+[33m80afdaa[m Refactor recipe input fields in recipe calculator
+[33md19f918[m Fix formatting issues in recipe-calculator.tsx
+[33m985a04a[m recipe name
+[33m277a60d[m Add final weight input to recipe calculator
+[33m9e01368[m fix: select
+[33m18655e9[m Não consigo nem selecionar o produto nem pesquisar, nem rolar para baixo
+[33m47643f0[m deixe mais bonito a pagina, as opções de calculadora, estoque na lateral
+[33m6d3700e[m no produto final , coloca uma opção de adicionar uma % da despesa de mat
+[33m633d1c2[m na pagina de estoque adicione categorias, igrediente, materias, e consum
+[33m7098480[m Na primeira foto, quero que adicione uma barra lateral para descer e sub
+[33m2573f19[m Try fixing this error: `Runtime FirebaseError: Firebase: Error (auth/inv
+[33mb54d585[m O produto final faça a soma para descobrir o preço de um apenas, ao inve
+[33m5840db4[m Deixe bonito separado por favor com esse tema
+[33m257be38[m Toda vez que puxo um item do estoque acontece o erro Application error:
+[33maae7a5c[m Toda vez que seleciono o produto no estoque ocorre esse erro Application
+[33mabe51eb[m Ok
+[33mbb8794d[m Quero mandar pro vercel
+[33m19c41f4[m ## Error Type Console Error
+[33m13dff92[m $firebase deploy
+[33m642892a[m Something went wrong creating your App Hosting rollout. Please try re-pu
+[33md334d9b[m Então desenvolva
+[33m7b12694[m Quero que você implemente um sistema de estoque integrado ao projeto atu
+[33md33ffcb[m File changes
+[33m08964d7[m Set up a Firebase backend
+[33m7235997[m crie um historico onde fica salvo  as receitas salvas e nos podemos alte
+[33m32b0450[m Initial prototype
+[33m83e8ae8[m Initialized workspace with Firebase Studio
