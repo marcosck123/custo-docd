@@ -386,6 +386,8 @@ const RecipeManager = ({ recipeType, title, description, collectionName }: { rec
 
 
 // --- GERENCIADOR DE PRODUTO FINAL ---
+// Substitua o componente FinalProductManager inteiro por este código
+
 const FinalProductManager = () => {
     const { toast } = useToast();
     const firestore = useFirestore();
@@ -399,56 +401,82 @@ const FinalProductManager = () => {
 
     // Form State
     const [nome, setNome] = useState('');
-    const [massaId, setMassaId] = useState<string | undefined>(undefined);
-    const [recheioId, setRecheioId] = useState<string | undefined>(undefined);
-    const [pesoMassa, setPesoMassa] = useState('');
-    const [pesoRecheio, setPesoRecheio] = useState('');
+
+    // Multi-select: array de { id, gramas }
+    const [selectedMassas, setSelectedMassas] = useState<{ id: string; gramas: string }[]>([]);
+    const [selectedRecheios, setSelectedRecheios] = useState<{ id: string; gramas: string }[]>([]);
+
     const [quantidadeFinal, setQuantidadeFinal] = useState('1');
     const [materialPercentage, setMaterialPercentage] = useState('0');
     const [consumoPercentage, setConsumoPercentage] = useState('0');
 
-   // Calculations
-const selectedDough = useMemo(() => doughRecipes?.find(r => r.id === massaId), [doughRecipes, massaId]);
-const selectedFilling = useMemo(() => fillingRecipes?.find(r => r.id === recheioId), [fillingRecipes, recheioId]);
+    // --- Handlers Multi-select Massa ---
+    const toggleMassa = (id: string) => {
+        setSelectedMassas(prev => {
+            const exists = prev.find(m => m.id === id);
+            if (exists) return prev.filter(m => m.id !== id);
+            return [...prev, { id, gramas: '' }];
+        });
+    };
 
-const custoUnitario = useMemo(() => {
-    // 1. Cálculo da Massa
-    const custoMassaPorGrama = (selectedDough && selectedDough.rendimento > 0) 
-        ? (selectedDough.custoTotal / selectedDough.rendimento) 
-        : 0;
-    const pesoM = parseFloat(pesoMassa.replace(',', '.')) || 0;
-    const custoMassaFinal = custoMassaPorGrama * pesoM;
+    const updateGramasMassa = (id: string, gramas: string) => {
+        setSelectedMassas(prev => prev.map(m => m.id === id ? { ...m, gramas } : m));
+    };
 
-    // 2. Cálculo do Recheio
-    const custoRecheioPorGrama = (selectedFilling && selectedFilling.rendimento > 0) 
-        ? (selectedFilling.custoTotal / selectedFilling.rendimento) 
-        : 0;
-    const pesoR = parseFloat(pesoRecheio.replace(',', '.')) || 0;
-    const custoRecheioFinal = custoRecheioPorGrama * pesoR;
+    // --- Handlers Multi-select Recheio ---
+    const toggleRecheio = (id: string) => {
+        setSelectedRecheios(prev => {
+            const exists = prev.find(r => r.id === id);
+            if (exists) return prev.filter(r => r.id !== id);
+            return [...prev, { id, gramas: '' }];
+        });
+    };
 
-    // 3. Soma os custos base
-    const baseUnitCost = custoMassaFinal + custoRecheioFinal;
+    const updateGramasRecheio = (id: string, gramas: string) => {
+        setSelectedRecheios(prev => prev.map(r => r.id === id ? { ...r, gramas } : r));
+    };
 
-    // 4. Aplica as porcentagens
-    const matPercentage = parseFloat(materialPercentage.replace(',', '.')) || 0;
-    const consPercentage = parseFloat(consumoPercentage.replace(',', '.')) || 0;
+    // --- Cálculos ---
+    const custoUnitario = useMemo(() => {
+        // Soma custo de todas as massas selecionadas
+        const custoMassas = selectedMassas.reduce((acc, sel) => {
+            const recipe = doughRecipes?.find(r => r.id === sel.id);
+            if (!recipe || recipe.rendimento <= 0) return acc;
+            const custoPorGrama = recipe.custoTotal / recipe.rendimento;
+            const gramas = parseFloat(sel.gramas.replace(',', '.')) || 0;
+            return acc + custoPorGrama * gramas;
+        }, 0);
 
-    const materialCost = baseUnitCost * (matPercentage / 100);
-    const consumoCost = baseUnitCost * (consPercentage / 100);
+        // Soma custo de todos os recheios selecionados
+        const custoRecheios = selectedRecheios.reduce((acc, sel) => {
+            const recipe = fillingRecipes?.find(r => r.id === sel.id);
+            if (!recipe || recipe.rendimento <= 0) return acc;
+            const custoPorGrama = recipe.custoTotal / recipe.rendimento;
+            const gramas = parseFloat(sel.gramas.replace(',', '.')) || 0;
+            return acc + custoPorGrama * gramas;
+        }, 0);
 
-    return baseUnitCost + materialCost + consumoCost;
-}, [selectedDough, selectedFilling, pesoMassa, pesoRecheio, materialPercentage, consumoPercentage]);
+        const baseUnitCost = custoMassas + custoRecheios;
 
-const custoTotal = useMemo(() => {
-    const quant = parseFloat(quantidadeFinal);
-    if (!custoUnitario || !quant || quant <= 0) return 0;
-    return custoUnitario * quant;
-}, [custoUnitario, quantidadeFinal]);
+        const matPercentage = parseFloat(materialPercentage.replace(',', '.')) || 0;
+        const consPercentage = parseFloat(consumoPercentage.replace(',', '.')) || 0;
 
-    // Handlers
+        const materialCost = baseUnitCost * (matPercentage / 100);
+        const consumoCost = baseUnitCost * (consPercentage / 100);
+
+        return baseUnitCost + materialCost + consumoCost;
+    }, [selectedMassas, selectedRecheios, doughRecipes, fillingRecipes, materialPercentage, consumoPercentage]);
+
+    const custoTotal = useMemo(() => {
+        const quant = parseFloat(quantidadeFinal);
+        if (!custoUnitario || !quant || quant <= 0) return 0;
+        return custoUnitario * quant;
+    }, [custoUnitario, quantidadeFinal]);
+
+    // --- Salvar ---
     const handleSaveProduct = () => {
-        if (!firestore || !nome || !massaId || !selectedDough) {
-            toast({ title: "Campos incompletos", description: "Nome e massa são obrigatórios.", variant: "destructive" });
+        if (!firestore || !nome || selectedMassas.length === 0) {
+            toast({ title: "Campos incompletos", description: "Nome e ao menos uma massa são obrigatórios.", variant: "destructive" });
             return;
         }
 
@@ -456,12 +484,20 @@ const custoTotal = useMemo(() => {
         const matPercentageNum = parseFloat(materialPercentage.replace(',', '.')) || 0;
         const consPercentageNum = parseFloat(consumoPercentage.replace(',', '.')) || 0;
 
-        const productData: Omit<FinalProduct, 'id' | 'dataCriacao'> = {
+        // Monta nomes para exibição
+        const nomesMassas = selectedMassas
+            .map(sel => doughRecipes?.find(r => r.id === sel.id)?.nome || sel.id)
+            .join(', ');
+        const nomesRecheios = selectedRecheios
+            .map(sel => fillingRecipes?.find(r => r.id === sel.id)?.nome || sel.id)
+            .join(', ');
+
+        const productData = {
             nome,
-            massaId,
-            nomeMassa: selectedDough.nome,
-            recheioId: recheioId === 'none' ? null : recheioId || null,
-            nomeRecheio: selectedFilling?.nome || null,
+            massas: selectedMassas,
+            nomeMassa: nomesMassas,
+            recheios: selectedRecheios,
+            nomeRecheio: nomesRecheios || null,
             materialPercentage: matPercentageNum,
             consumoPercentage: consPercentageNum,
             quantidadeFinal: finalQuantityNum,
@@ -474,8 +510,8 @@ const custoTotal = useMemo(() => {
 
         // Reset form
         setNome('');
-        setMassaId(undefined);
-        setRecheioId(undefined);
+        setSelectedMassas([]);
+        setSelectedRecheios([]);
         setQuantidadeFinal('1');
         setMaterialPercentage('0');
         setConsumoPercentage('0');
@@ -488,64 +524,144 @@ const custoTotal = useMemo(() => {
                 <CardDescription>Monte seu produto com base nas receitas para calcular o custo unitário.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+
                 {/* Nome do Produto */}
                 <div className="space-y-2">
                     <Label htmlFor="product-name">Nome do Produto Final</Label>
-                    <Input 
-                        id="product-name" 
-                        value={nome} 
-                        onChange={(e) => setNome(e.target.value)} 
-                        placeholder="Ex: Bolo no pote Ninho com Brigadeiro" 
+                    <Input
+                        id="product-name"
+                        value={nome}
+                        onChange={(e) => setNome(e.target.value)}
+                        placeholder="Ex: Bolo no pote Ninho com Brigadeiro"
                     />
                 </div>
 
-                {/* Seleção de Receitas e Pesos */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>Receita da Massa</Label>
-                            <Select value={massaId} onValueChange={setMassaId}>
-                                <SelectTrigger><SelectValue placeholder="Selecione a massa..." /></SelectTrigger>
-                                <SelectContent>
-                                    {isLoadingDough ? <SelectItem value="loading" disabled>Carregando...</SelectItem> :
-                                     doughRecipes?.map(r => <SelectItem key={r.id} value={r.id}>{r.nome}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label className="text-xs text-muted-foreground">Qtd. de Massa por Unidade (g)</Label>
-                            <Input 
-                                type="number" 
-                                placeholder="Ex: 100" 
-                                value={pesoMassa} 
-                                onChange={(e) => setPesoMassa(e.target.value)} 
-                            />
-                        </div>
-                    </div>
+                {/* Multi-select de Massas */}
+                <div className="space-y-3">
+                    <Label className="text-base font-semibold">Receitas de Massa</Label>
+                    {isLoadingDough ? (
+                        <Skeleton className="h-10 w-full" />
+                    ) : doughRecipes && doughRecipes.length > 0 ? (
+                        <div className="space-y-2 border rounded-md p-3">
+                            {doughRecipes.map(recipe => {
+                                const selected = selectedMassas.find(m => m.id === recipe.id);
+                                return (
+                                    <div key={recipe.id}>
+                                        {/* Checkbox da massa */}
+                                        <div
+                                            className={cn(
+                                                "flex items-center gap-3 p-2 rounded-md cursor-pointer transition-colors",
+                                                selected ? "bg-primary/10" : "hover:bg-muted/50"
+                                            )}
+                                            onClick={() => toggleMassa(recipe.id)}
+                                        >
+                                            <div className={cn(
+                                                "h-4 w-4 rounded border-2 flex items-center justify-center shrink-0",
+                                                selected ? "bg-primary border-primary" : "border-muted-foreground"
+                                            )}>
+                                                {selected && <Check className="h-3 w-3 text-primary-foreground" />}
+                                            </div>
+                                            <span className="font-medium">{recipe.nome}</span>
+                                            <span className="text-xs text-muted-foreground ml-auto">
+                                                {formatCurrency(recipe.custoTotal / recipe.rendimento)}/g
+                                            </span>
+                                        </div>
 
-                    <div className="space-y-4">
-                        <div className="space-y-2">
-                            <Label>Receita do Recheio (Opcional)</Label>
-                            <Select value={recheioId} onValueChange={setRecheioId}>
-                                <SelectTrigger><SelectValue placeholder="Selecione o recheio..." /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="none">Nenhum recheio</SelectItem>
-                                    {isLoadingFilling ? <SelectItem value="loading-filling" disabled>Carregando...</SelectItem> :
-                                     fillingRecipes?.map(r => <SelectItem key={r.id} value={r.id}>{r.nome}</SelectItem>)}
-                                </SelectContent>
-                            </Select>
+                                        {/* Campo de gramas — aparece só se selecionado */}
+                                        {selected && (
+                                            <div className="ml-7 mt-1 mb-2 flex items-center gap-2">
+                                                <Input
+                                                    type="number"
+                                                    placeholder="Ex: 100"
+                                                    value={selected.gramas}
+                                                    onChange={(e) => updateGramasMassa(recipe.id, e.target.value)}
+                                                    className="w-40 h-8 text-sm"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                />
+                                                <span className="text-sm text-muted-foreground">gramas usados</span>
+                                                {selected.gramas && (
+                                                    <span className="text-sm font-medium text-primary ml-auto">
+                                                        = {formatCurrency(
+                                                            (recipe.custoTotal / recipe.rendimento) *
+                                                            (parseFloat(selected.gramas.replace(',', '.')) || 0)
+                                                        )}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
-                        <div className="space-y-2">
-                            <Label className="text-xs text-muted-foreground">Qtd. de Recheio por Unidade (g)</Label>
-                            <Input 
-                                type="number" 
-                                placeholder="Ex: 50" 
-                                value={pesoRecheio} 
-                                onChange={(e) => setPesoRecheio(e.target.value)} 
-                                disabled={recheioId === 'none' || !recheioId} 
-                            />
+                    ) : (
+                        <p className="text-sm text-muted-foreground p-3 border rounded-md">
+                            Nenhuma receita de massa encontrada. Crie uma na aba "Massa".
+                        </p>
+                    )}
+                </div>
+
+                {/* Multi-select de Recheios */}
+                <div className="space-y-3">
+                    <Label className="text-base font-semibold">Receitas de Recheio <span className="text-muted-foreground font-normal text-sm">(Opcional)</span></Label>
+                    {isLoadingFilling ? (
+                        <Skeleton className="h-10 w-full" />
+                    ) : fillingRecipes && fillingRecipes.length > 0 ? (
+                        <div className="space-y-2 border rounded-md p-3">
+                            {fillingRecipes.map(recipe => {
+                                const selected = selectedRecheios.find(r => r.id === recipe.id);
+                                return (
+                                    <div key={recipe.id}>
+                                        {/* Checkbox do recheio */}
+                                        <div
+                                            className={cn(
+                                                "flex items-center gap-3 p-2 rounded-md cursor-pointer transition-colors",
+                                                selected ? "bg-primary/10" : "hover:bg-muted/50"
+                                            )}
+                                            onClick={() => toggleRecheio(recipe.id)}
+                                        >
+                                            <div className={cn(
+                                                "h-4 w-4 rounded border-2 flex items-center justify-center shrink-0",
+                                                selected ? "bg-primary border-primary" : "border-muted-foreground"
+                                            )}>
+                                                {selected && <Check className="h-3 w-3 text-primary-foreground" />}
+                                            </div>
+                                            <span className="font-medium">{recipe.nome}</span>
+                                            <span className="text-xs text-muted-foreground ml-auto">
+                                                {formatCurrency(recipe.custoTotal / recipe.rendimento)}/g
+                                            </span>
+                                        </div>
+
+                                        {/* Campo de gramas — aparece só se selecionado */}
+                                        {selected && (
+                                            <div className="ml-7 mt-1 mb-2 flex items-center gap-2">
+                                                <Input
+                                                    type="number"
+                                                    placeholder="Ex: 50"
+                                                    value={selected.gramas}
+                                                    onChange={(e) => updateGramasRecheio(recipe.id, e.target.value)}
+                                                    className="w-40 h-8 text-sm"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                />
+                                                <span className="text-sm text-muted-foreground">gramas usados</span>
+                                                {selected.gramas && (
+                                                    <span className="text-sm font-medium text-primary ml-auto">
+                                                        = {formatCurrency(
+                                                            (recipe.custoTotal / recipe.rendimento) *
+                                                            (parseFloat(selected.gramas.replace(',', '.')) || 0)
+                                                        )}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
-                    </div>
+                    ) : (
+                        <p className="text-sm text-muted-foreground p-3 border rounded-md">
+                            Nenhuma receita de recheio encontrada.
+                        </p>
+                    )}
                 </div>
 
                 {/* Porcentagens Adicionais */}
@@ -579,9 +695,9 @@ const custoTotal = useMemo(() => {
                     </div>
                 </div>
 
-                  <Button onClick={handleSaveProduct} className="w-full">
-                  <Save className="mr-2 h-4 w-4" /> Salvar Produto Final
-                  </Button>
+                <Button onClick={handleSaveProduct} className="w-full">
+                    <Save className="mr-2 h-4 w-4" /> Salvar Produto Final
+                </Button>
             </CardContent>
         </Card>
     );
