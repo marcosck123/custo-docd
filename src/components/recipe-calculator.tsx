@@ -1,9 +1,9 @@
 "use client";
 import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RecipeManager } from './RecipeManager';
-import { FinalProductManager } from './FinalProductManager';
-import { SavedProductsManager } from './SavedProductsManager';
+import { RecipeManager } from './RecipeMananger';
+import { FinalProductManager } from './Finalproductmanager';
+import { SavedProductsManager } from './Savedproductmanager';
 
 export function RecipeFlow() {
   return (
