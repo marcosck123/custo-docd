@@ -39,6 +39,8 @@ export const FinalProductManager = () => {
   const [quantidadeFinal, setQuantidadeFinal] = useState('1');
   const [materialPercentage, setMaterialPercentage] = useState('0');
   const [consumoPercentage, setConsumoPercentage] = useState('0');
+  const [maoDeObra, setMaoDeObra] = useState('0');         // valor fixo em R$
+  const [margemLucro, setMargemLucro] = useState('0');     // porcentagem %
 
   const handleAdicionarMassa = () => {
     if (!massaSelecionadaId) { toast({ title: "Selecione uma massa", variant: "destructive" }); return; }
@@ -67,6 +69,7 @@ export const FinalProductManager = () => {
   const removerMassa = (id: string) => setMassasAdicionadas(prev => prev.filter(m => m.id !== id));
   const removerRecheio = (id: string) => setRecheiosAdicionados(prev => prev.filter(r => r.id !== id));
 
+  // Custo unitário = ingredientes + material + consumo + mão de obra
   const custoUnitario = useMemo(() => {
     const custoMassas = massasAdicionadas.reduce((acc, sel) => {
       const recipe = doughRecipes?.find(r => r.id === sel.id);
@@ -81,14 +84,27 @@ export const FinalProductManager = () => {
     const base = custoMassas + custoRecheios;
     const mat = parseFloat(materialPercentage.replace(',', '.')) || 0;
     const cons = parseFloat(consumoPercentage.replace(',', '.')) || 0;
-    return base + base * (mat / 100) + base * (cons / 100);
-  }, [massasAdicionadas, recheiosAdicionados, doughRecipes, fillingRecipes, materialPercentage, consumoPercentage]);
+    const mao = parseFloat(maoDeObra.replace(',', '.')) || 0;
+    return base + base * (mat / 100) + base * (cons / 100) + mao;
+  }, [massasAdicionadas, recheiosAdicionados, doughRecipes, fillingRecipes, materialPercentage, consumoPercentage, maoDeObra]);
 
   const custoTotal = useMemo(() => {
     const quant = parseFloat(quantidadeFinal);
     if (!custoUnitario || !quant || quant <= 0) return 0;
     return custoUnitario * quant;
   }, [custoUnitario, quantidadeFinal]);
+
+  // Preço de venda sugerido = custo / (1 - margem%)
+  const precoVendaSugerido = useMemo(() => {
+    const margem = parseFloat(margemLucro.replace(',', '.')) || 0;
+    if (margem >= 100) return 0;
+    if (margem <= 0) return custoUnitario;
+    return custoUnitario / (1 - margem / 100);
+  }, [custoUnitario, margemLucro]);
+
+  const lucroUnitario = useMemo(() => {
+    return precoVendaSugerido - custoUnitario;
+  }, [precoVendaSugerido, custoUnitario]);
 
   const handleSaveProduct = () => {
     if (!firestore || !nome || massasAdicionadas.length === 0) {
@@ -107,6 +123,9 @@ export const FinalProductManager = () => {
       nomeRecheio: nomesRecheios || null,
       materialPercentage: parseFloat(materialPercentage.replace(',', '.')) || 0,
       consumoPercentage: parseFloat(consumoPercentage.replace(',', '.')) || 0,
+      maoDeObra: parseFloat(maoDeObra.replace(',', '.')) || 0,
+      margemLucro: parseFloat(margemLucro.replace(',', '.')) || 0,
+      precoVenda: precoVendaSugerido,
       quantidadeFinal: finalQuantityNum,
       custoTotal: custoUnitario * finalQuantityNum,
       custoUnitario,
@@ -120,6 +139,8 @@ export const FinalProductManager = () => {
     setQuantidadeFinal('1');
     setMaterialPercentage('0');
     setConsumoPercentage('0');
+    setMaoDeObra('0');
+    setMargemLucro('0');
   };
 
   return (
@@ -224,25 +245,71 @@ export const FinalProductManager = () => {
           )}
         </div>
 
-        {/* Porcentagens */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Adicional de Material (%)</Label>
-            <Input type="number" value={materialPercentage} onChange={e => setMaterialPercentage(e.target.value)} placeholder="0" />
+        {/* ── CUSTOS ADICIONAIS ── */}
+        <div className="space-y-3">
+          <Label className="text-base font-semibold">Custos Adicionais</Label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Adicional de Material (%)</Label>
+              <Input type="number" value={materialPercentage} onChange={e => setMaterialPercentage(e.target.value)} placeholder="0" />
+            </div>
+            <div className="space-y-2">
+              <Label>Adicional de Consumo (%)</Label>
+              <Input type="number" value={consumoPercentage} onChange={e => setConsumoPercentage(e.target.value)} placeholder="0" />
+            </div>
           </div>
           <div className="space-y-2">
-            <Label>Adicional de Consumo (%)</Label>
-            <Input type="number" value={consumoPercentage} onChange={e => setConsumoPercentage(e.target.value)} placeholder="0" />
+            <Label>Mão de Obra por Unidade (R$)</Label>
+            <Input
+              type="number"
+              value={maoDeObra}
+              onChange={e => setMaoDeObra(e.target.value)}
+              placeholder="Ex: 5,00"
+            />
+            <p className="text-xs text-muted-foreground">Valor fixo em reais adicionado ao custo de cada unidade.</p>
           </div>
         </div>
 
         <Separator />
 
+        {/* ── RESUMO DE CUSTOS ── */}
         <div className="p-4 bg-primary/5 rounded-lg text-center space-y-1">
           <p className="text-sm text-muted-foreground italic">Custo por Unidade</p>
           <h2 className="text-3xl font-bold text-primary">{formatCurrency(custoUnitario)}</h2>
         </div>
 
+        {/* ── MARGEM DE LUCRO ── */}
+        <div className="space-y-3">
+          <Label className="text-base font-semibold">Precificação</Label>
+          <div className="space-y-2">
+            <Label>Margem de Lucro (%)</Label>
+            <Input
+              type="number"
+              value={margemLucro}
+              onChange={e => setMargemLucro(e.target.value)}
+              placeholder="Ex: 30"
+            />
+            <p className="text-xs text-muted-foreground">Ex: 30% significa que 30% do preço de venda é lucro.</p>
+          </div>
+
+          {/* Card de preço de venda — aparece só quando há margem */}
+          {parseFloat(margemLucro) > 0 && custoUnitario > 0 && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-center space-y-1">
+                <p className="text-xs text-muted-foreground">Preço de Venda Sugerido</p>
+                <p className="text-xl font-bold text-green-600">{formatCurrency(precoVendaSugerido)}</p>
+              </div>
+              <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-center space-y-1">
+                <p className="text-xs text-muted-foreground">Lucro por Unidade</p>
+                <p className="text-xl font-bold text-blue-600">{formatCurrency(lucroUnitario)}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <Separator />
+
+        {/* ── QUANTIDADE E TOTAL ── */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label>Quantidade a Produzir</Label>
@@ -251,6 +318,11 @@ export const FinalProductManager = () => {
           <div className="space-y-2 flex flex-col justify-end text-right">
             <p className="text-sm text-muted-foreground italic">Custo Total da Produção</p>
             <p className="text-2xl font-bold">{formatCurrency(custoTotal)}</p>
+            {parseFloat(margemLucro) > 0 && (
+              <p className="text-sm text-green-600 font-medium">
+                Venda total: {formatCurrency(precoVendaSugerido * (parseFloat(quantidadeFinal) || 1))}
+              </p>
+            )}
           </div>
         </div>
 
