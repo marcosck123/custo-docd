@@ -51,18 +51,25 @@ export type FinalProduct = {
   recheios?: SelectedRecipeItem[];
   nomeRecheio: string | null;
 
-  // Campos legados (compatibilidade)
+  // Campos legados (compatibilidade com produtos salvos no formato antigo)
   massaId?: string;
   recheioId?: string | null;
+  pesoMassa?: number;
+  pesoRecheio?: number;
 
   // Custos adicionais
   materialPercentage?: number;
   consumoPercentage?: number;
-  maoDeObra?: number;       // valor fixo em R$ por unidade
+  maoDeObra?: number;
 
-  // Precificação
-  margemLucro?: number;     // % de margem
-  precoVenda?: number;      // preço de venda sugerido
+  // Precificação completa (3 cenários)
+  margemLucro?: number;     // legado
+  precoVenda?: number;      // legado
+  margemMinima?: number;
+  margemIdeal?: number;
+  margemVenda?: number;
+  precoMinimo?: number;
+  precoIdeal?: number;
 
   quantidadeFinal: number;
   custoTotal: number;

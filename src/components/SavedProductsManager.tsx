@@ -15,14 +15,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { FinalProductManager } from './FinalProductManager';
 
 const formatCurrency = (value: number | null | undefined) => {
-  if (value === null || value === undefined || isNaN(value) || !isFinite(value)) return "R$ 0,00";
+  if (value === null || value === undefined || isNaN(value) || !isFinite(value)) return "—";
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
 
 export const SavedProductsManager = () => {
   const firestore = useFirestore();
   const { toast } = useToast();
-
   const [editingProduct, setEditingProduct] = useState<FinalProduct | null>(null);
 
   const productsQuery = useMemoFirebase(() => firestore ? collection(firestore, 'produtos_finais') : null, [firestore]);
@@ -47,9 +46,10 @@ export const SavedProductsManager = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome do Produto</TableHead>
-                  <TableHead>Custo Unitário</TableHead>
-                  <TableHead>Preço de Venda</TableHead>
-                  <TableHead>Custo Total</TableHead>
+                  <TableHead>Custo Unit.</TableHead>
+                  <TableHead className="text-red-500">🔴 Mínimo</TableHead>
+                  <TableHead className="text-primary">⭐ Ideal</TableHead>
+                  <TableHead className="text-green-600">💰 Venda</TableHead>
                   <TableHead>Qtd.</TableHead>
                   <TableHead className="text-right w-[100px]">Ações</TableHead>
                 </TableRow>
@@ -57,7 +57,7 @@ export const SavedProductsManager = () => {
               <TableBody>
                 {isLoading ? (
                   Array.from({ length: 4 }).map((_, i) => (
-                    <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+                    <TableRow key={i}><TableCell colSpan={7}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
                   ))
                 ) : products && products.length > 0 ? (
                   products.map((product) => (
@@ -73,21 +73,45 @@ export const SavedProductsManager = () => {
                         )}
                       </TableCell>
                       <TableCell>{formatCurrency(product.custoUnitario)}</TableCell>
+
+                      {/* Preço Mínimo */}
                       <TableCell>
-                        {product.precoVenda
-                          ? <span className="text-green-600 font-medium">{formatCurrency(product.precoVenda)}</span>
-                          : <span className="text-muted-foreground text-xs">—</span>
-                        }
+                        {product.precoMinimo ? (
+                          <div>
+                            <p className="font-medium text-red-500">{formatCurrency(product.precoMinimo)}</p>
+                            {product.margemMinima && <p className="text-xs text-muted-foreground">{product.margemMinima}%</p>}
+                          </div>
+                        ) : product.precoVenda ? (
+                          <span className="text-muted-foreground text-xs">{formatCurrency(product.precoVenda)}</span>
+                        ) : <span className="text-muted-foreground text-xs">—</span>}
                       </TableCell>
-                      <TableCell>{formatCurrency(product.custoTotal)}</TableCell>
+
+                      {/* Preço Ideal */}
+                      <TableCell>
+                        {product.precoIdeal ? (
+                          <div>
+                            <p className="font-medium text-primary">{formatCurrency(product.precoIdeal)}</p>
+                            {product.margemIdeal && <p className="text-xs text-muted-foreground">{product.margemIdeal}%</p>}
+                          </div>
+                        ) : <span className="text-muted-foreground text-xs">—</span>}
+                      </TableCell>
+
+                      {/* Preço de Venda */}
+                      <TableCell>
+                        {product.precoVenda || product.margemVenda ? (
+                          <div>
+                            <p className="font-medium text-green-600">{formatCurrency(product.precoVenda)}</p>
+                            {product.margemVenda && <p className="text-xs text-muted-foreground">{product.margemVenda}%</p>}
+                          </div>
+                        ) : <span className="text-muted-foreground text-xs">—</span>}
+                      </TableCell>
+
                       <TableCell>{product.quantidadeFinal} unid.</TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-1">
-                          {/* Botão Editar */}
                           <Button variant="ghost" size="icon" onClick={() => setEditingProduct(product)}>
                             <Edit className="h-4 w-4" />
                           </Button>
-                          {/* Botão Deletar */}
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button variant="ghost" size="icon"><Trash2 className="h-4 w-4 text-destructive/80" /></Button>
@@ -108,7 +132,7 @@ export const SavedProductsManager = () => {
                     </TableRow>
                   ))
                 ) : (
-                  <TableRow><TableCell colSpan={6} className="text-center h-24">Nenhum produto final salvo.</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={7} className="text-center h-24">Nenhum produto final salvo.</TableCell></TableRow>
                 )}
               </TableBody>
             </Table>

@@ -19,9 +19,16 @@ const formatCurrency = (value: number | null | undefined) => {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
 
+// Calcula preço de venda a partir do custo e margem desejada
+const calcPrecoVenda = (custo: number, margem: number) => {
+  if (margem >= 100 || custo <= 0) return 0;
+  if (margem <= 0) return custo;
+  return custo / (1 - margem / 100);
+};
+
 interface FinalProductManagerProps {
-  productToEdit?: FinalProduct | null;  // se passado, entra em modo edição
-  onSaved?: () => void;                 // callback ao salvar em modo edição
+  productToEdit?: FinalProduct | null;
+  onSaved?: () => void;
 }
 
 export const FinalProductManager = ({ productToEdit, onSaved }: FinalProductManagerProps = {}) => {
@@ -46,19 +53,37 @@ export const FinalProductManager = ({ productToEdit, onSaved }: FinalProductMana
   const [materialPercentage, setMaterialPercentage] = useState('0');
   const [consumoPercentage, setConsumoPercentage] = useState('0');
   const [maoDeObra, setMaoDeObra] = useState('0');
-  const [margemLucro, setMargemLucro] = useState('0');
 
-  // Preenche os campos quando estiver editando
+  // 3 cenários de precificação
+  const [margemMinima, setMargemMinima] = useState('20');   // preço mínimo
+  const [margemIdeal, setMargemIdeal] = useState('35');     // preço ideal
+  const [margemVenda, setMargemVenda] = useState('50');     // preço de venda
+
+  // Preenche campos no modo edição
   useEffect(() => {
     if (productToEdit) {
       setNome(productToEdit.nome || '');
-      setMassasAdicionadas(productToEdit.massas || []);
-      setRecheiosAdicionados(productToEdit.recheios || []);
+      if (productToEdit.massas && productToEdit.massas.length > 0) {
+        setMassasAdicionadas(productToEdit.massas);
+      } else if (productToEdit.massaId) {
+        setMassasAdicionadas([{ id: productToEdit.massaId, gramas: String(productToEdit.pesoMassa || '') }]);
+      } else {
+        setMassasAdicionadas([]);
+      }
+      if (productToEdit.recheios && productToEdit.recheios.length > 0) {
+        setRecheiosAdicionados(productToEdit.recheios);
+      } else if (productToEdit.recheioId && productToEdit.recheioId !== 'none') {
+        setRecheiosAdicionados([{ id: productToEdit.recheioId, gramas: String(productToEdit.pesoRecheio || '') }]);
+      } else {
+        setRecheiosAdicionados([]);
+      }
       setQuantidadeFinal(String(productToEdit.quantidadeFinal || 1));
       setMaterialPercentage(String(productToEdit.materialPercentage || 0));
       setConsumoPercentage(String(productToEdit.consumoPercentage || 0));
       setMaoDeObra(String(productToEdit.maoDeObra || 0));
-      setMargemLucro(String(productToEdit.margemLucro || 0));
+      setMargemMinima(String(productToEdit.margemMinima || 20));
+      setMargemIdeal(String(productToEdit.margemIdeal || 35));
+      setMargemVenda(String(productToEdit.margemVenda || 50));
     }
   }, [productToEdit]);
 
@@ -113,14 +138,10 @@ export const FinalProductManager = ({ productToEdit, onSaved }: FinalProductMana
     return custoUnitario * quant;
   }, [custoUnitario, quantidadeFinal]);
 
-  const precoVendaSugerido = useMemo(() => {
-    const margem = parseFloat(margemLucro.replace(',', '.')) || 0;
-    if (margem >= 100) return 0;
-    if (margem <= 0) return custoUnitario;
-    return custoUnitario / (1 - margem / 100);
-  }, [custoUnitario, margemLucro]);
-
-  const lucroUnitario = useMemo(() => precoVendaSugerido - custoUnitario, [precoVendaSugerido, custoUnitario]);
+  // 3 preços calculados
+  const precoMinimo = useMemo(() => calcPrecoVenda(custoUnitario, parseFloat(margemMinima) || 0), [custoUnitario, margemMinima]);
+  const precoIdeal  = useMemo(() => calcPrecoVenda(custoUnitario, parseFloat(margemIdeal) || 0),  [custoUnitario, margemIdeal]);
+  const precoVenda  = useMemo(() => calcPrecoVenda(custoUnitario, parseFloat(margemVenda) || 0),  [custoUnitario, margemVenda]);
 
   const resetForm = () => {
     setNome('');
@@ -130,7 +151,9 @@ export const FinalProductManager = ({ productToEdit, onSaved }: FinalProductMana
     setMaterialPercentage('0');
     setConsumoPercentage('0');
     setMaoDeObra('0');
-    setMargemLucro('0');
+    setMargemMinima('20');
+    setMargemIdeal('35');
+    setMargemVenda('50');
   };
 
   const handleSaveProduct = () => {
@@ -151,24 +174,23 @@ export const FinalProductManager = ({ productToEdit, onSaved }: FinalProductMana
       materialPercentage: parseFloat(materialPercentage.replace(',', '.')) || 0,
       consumoPercentage: parseFloat(consumoPercentage.replace(',', '.')) || 0,
       maoDeObra: parseFloat(maoDeObra.replace(',', '.')) || 0,
-      margemLucro: parseFloat(margemLucro.replace(',', '.')) || 0,
-      precoVenda: precoVendaSugerido,
+      margemMinima: parseFloat(margemMinima) || 0,
+      margemIdeal: parseFloat(margemIdeal) || 0,
+      margemVenda: parseFloat(margemVenda) || 0,
+      precoMinimo,
+      precoIdeal,
+      precoVenda,
       quantidadeFinal: finalQuantityNum,
       custoTotal: custoUnitario * finalQuantityNum,
       custoUnitario,
     };
 
     if (isEditing && productToEdit) {
-      // Atualiza documento existente
       updateDocumentNonBlocking(doc(firestore, 'produtos_finais', productToEdit.id), productData);
       toast({ title: "Produto atualizado!", description: `${nome} foi atualizado com sucesso.` });
       onSaved?.();
     } else {
-      // Cria novo documento
-      addDocumentNonBlocking(collection(firestore, 'produtos_finais'), {
-        ...productData,
-        dataCriacao: serverTimestamp(),
-      });
+      addDocumentNonBlocking(collection(firestore, 'produtos_finais'), { ...productData, dataCriacao: serverTimestamp() });
       toast({ title: "Produto Salvo!", description: `${nome} foi adicionado aos seus produtos.` });
       resetForm();
     }
@@ -199,8 +221,7 @@ export const FinalProductManager = ({ productToEdit, onSaved }: FinalProductMana
               <Select value={massaSelecionadaId} onValueChange={setMassaSelecionadaId}>
                 <SelectTrigger><SelectValue placeholder="Selecione a massa..." /></SelectTrigger>
                 <SelectContent>
-                  {isLoadingDough
-                    ? <SelectItem value="loading" disabled>Carregando...</SelectItem>
+                  {isLoadingDough ? <SelectItem value="loading" disabled>Carregando...</SelectItem>
                     : doughRecipes?.map(r => <SelectItem key={r.id} value={r.id}>{r.nome}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -243,8 +264,7 @@ export const FinalProductManager = ({ productToEdit, onSaved }: FinalProductMana
               <Select value={recheioSelecionadoId} onValueChange={setRecheioSelecionadoId}>
                 <SelectTrigger><SelectValue placeholder="Selecione o recheio..." /></SelectTrigger>
                 <SelectContent>
-                  {isLoadingFilling
-                    ? <SelectItem value="loading" disabled>Carregando...</SelectItem>
+                  {isLoadingFilling ? <SelectItem value="loading" disabled>Carregando...</SelectItem>
                     : fillingRecipes?.map(r => <SelectItem key={r.id} value={r.id}>{r.nome}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -300,33 +320,89 @@ export const FinalProductManager = ({ productToEdit, onSaved }: FinalProductMana
 
         <Separator />
 
-        {/* ── RESUMO DE CUSTOS ── */}
+        {/* ── CUSTO UNITÁRIO ── */}
         <div className="p-4 bg-primary/5 rounded-lg text-center space-y-1">
           <p className="text-sm text-muted-foreground italic">Custo por Unidade</p>
           <h2 className="text-3xl font-bold text-primary">{formatCurrency(custoUnitario)}</h2>
         </div>
 
-        {/* ── MARGEM DE LUCRO ── */}
-        <div className="space-y-3">
-          <Label className="text-base font-semibold">Precificação</Label>
-          <div className="space-y-2">
-            <Label>Margem de Lucro (%)</Label>
-            <Input type="number" value={margemLucro} onChange={e => setMargemLucro(e.target.value)} placeholder="Ex: 30" />
-            <p className="text-xs text-muted-foreground">Ex: 30% significa que 30% do preço de venda é lucro.</p>
-          </div>
-          {parseFloat(margemLucro) > 0 && custoUnitario > 0 && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-center space-y-1">
-                <p className="text-xs text-muted-foreground">Preço de Venda Sugerido</p>
-                <p className="text-xl font-bold text-green-600">{formatCurrency(precoVendaSugerido)}</p>
+        {/* ── PRECIFICAÇÃO COMPLETA ── */}
+        {custoUnitario > 0 && (
+          <div className="space-y-3">
+            <Label className="text-base font-semibold">Precificação</Label>
+            <p className="text-xs text-muted-foreground">Defina 3 cenários de margem. O preço de venda é calculado automaticamente.</p>
+
+            <div className="grid grid-cols-3 gap-3">
+
+              {/* Preço Mínimo */}
+              <div className="space-y-2">
+                <div className="p-3 border rounded-lg space-y-2">
+                  <p className="text-xs font-medium text-center text-muted-foreground">🔴 Mínimo</p>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Margem (%)</Label>
+                    <Input
+                      type="number"
+                      value={margemMinima}
+                      onChange={e => setMargemMinima(e.target.value)}
+                      className="h-8 text-sm"
+                      placeholder="20"
+                    />
+                  </div>
+                  <div className="text-center pt-1">
+                    <p className="text-xs text-muted-foreground">Preço</p>
+                    <p className="text-lg font-bold text-red-500">{formatCurrency(precoMinimo)}</p>
+                    <p className="text-xs text-muted-foreground">Lucro: {formatCurrency(precoMinimo - custoUnitario)}</p>
+                  </div>
+                </div>
               </div>
-              <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-center space-y-1">
-                <p className="text-xs text-muted-foreground">Lucro por Unidade</p>
-                <p className="text-xl font-bold text-blue-600">{formatCurrency(lucroUnitario)}</p>
+
+              {/* Preço Ideal */}
+              <div className="space-y-2">
+                <div className="p-3 border-2 border-primary/40 rounded-lg space-y-2 bg-primary/5">
+                  <p className="text-xs font-medium text-center text-primary">⭐ Ideal</p>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Margem (%)</Label>
+                    <Input
+                      type="number"
+                      value={margemIdeal}
+                      onChange={e => setMargemIdeal(e.target.value)}
+                      className="h-8 text-sm"
+                      placeholder="35"
+                    />
+                  </div>
+                  <div className="text-center pt-1">
+                    <p className="text-xs text-muted-foreground">Preço</p>
+                    <p className="text-lg font-bold text-primary">{formatCurrency(precoIdeal)}</p>
+                    <p className="text-xs text-muted-foreground">Lucro: {formatCurrency(precoIdeal - custoUnitario)}</p>
+                  </div>
+                </div>
               </div>
+
+              {/* Preço de Venda */}
+              <div className="space-y-2">
+                <div className="p-3 border rounded-lg space-y-2">
+                  <p className="text-xs font-medium text-center text-green-600">💰 Venda</p>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Margem (%)</Label>
+                    <Input
+                      type="number"
+                      value={margemVenda}
+                      onChange={e => setMargemVenda(e.target.value)}
+                      className="h-8 text-sm"
+                      placeholder="50"
+                    />
+                  </div>
+                  <div className="text-center pt-1">
+                    <p className="text-xs text-muted-foreground">Preço</p>
+                    <p className="text-lg font-bold text-green-600">{formatCurrency(precoVenda)}</p>
+                    <p className="text-xs text-muted-foreground">Lucro: {formatCurrency(precoVenda - custoUnitario)}</p>
+                  </div>
+                </div>
+              </div>
+
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         <Separator />
 
@@ -339,9 +415,9 @@ export const FinalProductManager = ({ productToEdit, onSaved }: FinalProductMana
           <div className="space-y-2 flex flex-col justify-end text-right">
             <p className="text-sm text-muted-foreground italic">Custo Total da Produção</p>
             <p className="text-2xl font-bold">{formatCurrency(custoTotal)}</p>
-            {parseFloat(margemLucro) > 0 && (
+            {custoUnitario > 0 && (
               <p className="text-sm text-green-600 font-medium">
-                Venda total: {formatCurrency(precoVendaSugerido * (parseFloat(quantidadeFinal) || 1))}
+                Venda ideal: {formatCurrency(precoIdeal * (parseFloat(quantidadeFinal) || 1))}
               </p>
             )}
           </div>
