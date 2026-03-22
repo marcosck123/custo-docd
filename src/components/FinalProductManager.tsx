@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,18 +10,24 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { PlusCircle, Save, XCircle } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
-import { collection, serverTimestamp } from 'firebase/firestore';
-import { addDocumentNonBlocking } from '@/firebase/non-blocking-updates';
-import type { DoughRecipe, FillingRecipe } from '@/lib/types';
+import { collection, doc, serverTimestamp } from 'firebase/firestore';
+import { addDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import type { DoughRecipe, FillingRecipe, FinalProduct } from '@/lib/types';
 
 const formatCurrency = (value: number | null | undefined) => {
   if (value === null || value === undefined || isNaN(value) || !isFinite(value)) return "R$ 0,00";
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 };
 
-export const FinalProductManager = () => {
+interface FinalProductManagerProps {
+  productToEdit?: FinalProduct | null;  // se passado, entra em modo edição
+  onSaved?: () => void;                 // callback ao salvar em modo edição
+}
+
+export const FinalProductManager = ({ productToEdit, onSaved }: FinalProductManagerProps = {}) => {
   const { toast } = useToast();
   const firestore = useFirestore();
+  const isEditing = !!productToEdit;
 
   const doughRecipesQuery = useMemoFirebase(() => firestore ? collection(firestore, 'receitas_massa') : null, [firestore]);
   const { data: doughRecipes, isLoading: isLoadingDough } = useCollection<DoughRecipe>(doughRecipesQuery);
@@ -39,8 +45,22 @@ export const FinalProductManager = () => {
   const [quantidadeFinal, setQuantidadeFinal] = useState('1');
   const [materialPercentage, setMaterialPercentage] = useState('0');
   const [consumoPercentage, setConsumoPercentage] = useState('0');
-  const [maoDeObra, setMaoDeObra] = useState('0');         // valor fixo em R$
-  const [margemLucro, setMargemLucro] = useState('0');     // porcentagem %
+  const [maoDeObra, setMaoDeObra] = useState('0');
+  const [margemLucro, setMargemLucro] = useState('0');
+
+  // Preenche os campos quando estiver editando
+  useEffect(() => {
+    if (productToEdit) {
+      setNome(productToEdit.nome || '');
+      setMassasAdicionadas(productToEdit.massas || []);
+      setRecheiosAdicionados(productToEdit.recheios || []);
+      setQuantidadeFinal(String(productToEdit.quantidadeFinal || 1));
+      setMaterialPercentage(String(productToEdit.materialPercentage || 0));
+      setConsumoPercentage(String(productToEdit.consumoPercentage || 0));
+      setMaoDeObra(String(productToEdit.maoDeObra || 0));
+      setMargemLucro(String(productToEdit.margemLucro || 0));
+    }
+  }, [productToEdit]);
 
   const handleAdicionarMassa = () => {
     if (!massaSelecionadaId) { toast({ title: "Selecione uma massa", variant: "destructive" }); return; }
@@ -69,7 +89,6 @@ export const FinalProductManager = () => {
   const removerMassa = (id: string) => setMassasAdicionadas(prev => prev.filter(m => m.id !== id));
   const removerRecheio = (id: string) => setRecheiosAdicionados(prev => prev.filter(r => r.id !== id));
 
-  // Custo unitário = ingredientes + material + consumo + mão de obra
   const custoUnitario = useMemo(() => {
     const custoMassas = massasAdicionadas.reduce((acc, sel) => {
       const recipe = doughRecipes?.find(r => r.id === sel.id);
@@ -94,7 +113,6 @@ export const FinalProductManager = () => {
     return custoUnitario * quant;
   }, [custoUnitario, quantidadeFinal]);
 
-  // Preço de venda sugerido = custo / (1 - margem%)
   const precoVendaSugerido = useMemo(() => {
     const margem = parseFloat(margemLucro.replace(',', '.')) || 0;
     if (margem >= 100) return 0;
@@ -102,9 +120,18 @@ export const FinalProductManager = () => {
     return custoUnitario / (1 - margem / 100);
   }, [custoUnitario, margemLucro]);
 
-  const lucroUnitario = useMemo(() => {
-    return precoVendaSugerido - custoUnitario;
-  }, [precoVendaSugerido, custoUnitario]);
+  const lucroUnitario = useMemo(() => precoVendaSugerido - custoUnitario, [precoVendaSugerido, custoUnitario]);
+
+  const resetForm = () => {
+    setNome('');
+    setMassasAdicionadas([]);
+    setRecheiosAdicionados([]);
+    setQuantidadeFinal('1');
+    setMaterialPercentage('0');
+    setConsumoPercentage('0');
+    setMaoDeObra('0');
+    setMargemLucro('0');
+  };
 
   const handleSaveProduct = () => {
     if (!firestore || !nome || massasAdicionadas.length === 0) {
@@ -115,7 +142,7 @@ export const FinalProductManager = () => {
     const nomesMassas = massasAdicionadas.map(sel => doughRecipes?.find(r => r.id === sel.id)?.nome || sel.id).join(', ');
     const nomesRecheios = recheiosAdicionados.map(sel => fillingRecipes?.find(r => r.id === sel.id)?.nome || sel.id).join(', ');
 
-    addDocumentNonBlocking(collection(firestore, 'produtos_finais'), {
+    const productData = {
       nome,
       massas: massasAdicionadas,
       nomeMassa: nomesMassas,
@@ -129,26 +156,32 @@ export const FinalProductManager = () => {
       quantidadeFinal: finalQuantityNum,
       custoTotal: custoUnitario * finalQuantityNum,
       custoUnitario,
-      dataCriacao: serverTimestamp(),
-    });
-    toast({ title: "Produto Salvo!", description: `${nome} foi adicionado aos seus produtos.` });
+    };
 
-    setNome('');
-    setMassasAdicionadas([]);
-    setRecheiosAdicionados([]);
-    setQuantidadeFinal('1');
-    setMaterialPercentage('0');
-    setConsumoPercentage('0');
-    setMaoDeObra('0');
-    setMargemLucro('0');
+    if (isEditing && productToEdit) {
+      // Atualiza documento existente
+      updateDocumentNonBlocking(doc(firestore, 'produtos_finais', productToEdit.id), productData);
+      toast({ title: "Produto atualizado!", description: `${nome} foi atualizado com sucesso.` });
+      onSaved?.();
+    } else {
+      // Cria novo documento
+      addDocumentNonBlocking(collection(firestore, 'produtos_finais'), {
+        ...productData,
+        dataCriacao: serverTimestamp(),
+      });
+      toast({ title: "Produto Salvo!", description: `${nome} foi adicionado aos seus produtos.` });
+      resetForm();
+    }
   };
 
   return (
-    <Card className="bg-background/50 border-primary/20">
-      <CardHeader>
-        <CardTitle>Produto Final</CardTitle>
-        <CardDescription>Monte seu produto com base nas receitas para calcular o custo unitário.</CardDescription>
-      </CardHeader>
+    <Card className={isEditing ? "border-0 shadow-none" : "bg-background/50 border-primary/20"}>
+      {!isEditing && (
+        <CardHeader>
+          <CardTitle>Produto Final</CardTitle>
+          <CardDescription>Monte seu produto com base nas receitas para calcular o custo unitário.</CardDescription>
+        </CardHeader>
+      )}
       <CardContent className="space-y-6">
 
         {/* Nome */}
@@ -260,12 +293,7 @@ export const FinalProductManager = () => {
           </div>
           <div className="space-y-2">
             <Label>Mão de Obra por Unidade (R$)</Label>
-            <Input
-              type="number"
-              value={maoDeObra}
-              onChange={e => setMaoDeObra(e.target.value)}
-              placeholder="Ex: 5,00"
-            />
+            <Input type="number" value={maoDeObra} onChange={e => setMaoDeObra(e.target.value)} placeholder="Ex: 5,00" />
             <p className="text-xs text-muted-foreground">Valor fixo em reais adicionado ao custo de cada unidade.</p>
           </div>
         </div>
@@ -283,16 +311,9 @@ export const FinalProductManager = () => {
           <Label className="text-base font-semibold">Precificação</Label>
           <div className="space-y-2">
             <Label>Margem de Lucro (%)</Label>
-            <Input
-              type="number"
-              value={margemLucro}
-              onChange={e => setMargemLucro(e.target.value)}
-              placeholder="Ex: 30"
-            />
+            <Input type="number" value={margemLucro} onChange={e => setMargemLucro(e.target.value)} placeholder="Ex: 30" />
             <p className="text-xs text-muted-foreground">Ex: 30% significa que 30% do preço de venda é lucro.</p>
           </div>
-
-          {/* Card de preço de venda — aparece só quando há margem */}
           {parseFloat(margemLucro) > 0 && custoUnitario > 0 && (
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-center space-y-1">
@@ -327,7 +348,8 @@ export const FinalProductManager = () => {
         </div>
 
         <Button onClick={handleSaveProduct} className="w-full">
-          <Save className="mr-2 h-4 w-4" /> Salvar Produto Final
+          <Save className="mr-2 h-4 w-4" />
+          {isEditing ? 'Salvar Alterações' : 'Salvar Produto Final'}
         </Button>
       </CardContent>
     </Card>
