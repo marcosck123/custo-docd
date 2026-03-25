@@ -1,18 +1,16 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, ChevronsUpDown, PlusCircle, Save, XCircle } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PlusCircle, Save, XCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { DialogClose, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import type { DoughRecipe, FillingRecipe, RecipeIngredient, StockItem } from "@/lib/types";
-import { cn } from "@/lib/utils";
 
 import { formatCurrency } from "./utils";
 
@@ -23,6 +21,7 @@ type RecipeFormProps = {
   stockItems: StockItem[] | null;
   isLoadingStock: boolean;
   recipeToEdit?: DoughRecipe | FillingRecipe | null;
+  selectContainer?: HTMLElement | null;
 };
 
 export function RecipeForm({
@@ -32,6 +31,7 @@ export function RecipeForm({
   stockItems,
   isLoadingStock,
   recipeToEdit,
+  selectContainer,
 }: RecipeFormProps) {
   const { toast } = useToast();
   const [nome, setNome] = useState(recipeToEdit?.nome || "");
@@ -42,7 +42,9 @@ export function RecipeForm({
   );
   const [selectedStockItemId, setSelectedStockItemId] = useState("");
   const [quantidadeUsada, setQuantidadeUsada] = useState("");
+  const [ingredientSearch, setIngredientSearch] = useState("");
   const [isIngredientSelectOpen, setIsIngredientSelectOpen] = useState(false);
+  const ingredientSearchInputRef = useRef<HTMLInputElement | null>(null);
 
   const calculateIngredientCost = useCallback(
     (ingredient: RecipeIngredient) => {
@@ -67,6 +69,16 @@ export function RecipeForm({
     return [...stockItems].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
   }, [stockItems]);
 
+  const filteredStockItems = useMemo(() => {
+    const normalizedSearch = ingredientSearch.trim().toLowerCase();
+
+    if (!normalizedSearch) {
+      return sortedStockItems;
+    }
+
+    return sortedStockItems.filter((item) => item.nome.toLowerCase().includes(normalizedSearch));
+  }, [ingredientSearch, sortedStockItems]);
+
   useEffect(() => {
     setIngredientes((current) =>
       current.map((ingredient) => ({
@@ -75,6 +87,16 @@ export function RecipeForm({
       }))
     );
   }, [calculateIngredientCost]);
+
+  useEffect(() => {
+    if (!isIngredientSelectOpen) return;
+
+    const focusId = window.requestAnimationFrame(() => {
+      ingredientSearchInputRef.current?.focus();
+    });
+
+    return () => window.cancelAnimationFrame(focusId);
+  }, [isIngredientSelectOpen]);
 
   const handleAddIngredient = () => {
     const stockItem = stockItems?.find((item) => item.id === selectedStockItemId);
@@ -100,6 +122,7 @@ export function RecipeForm({
     setIngredientes([...ingredientes, newIngredient]);
     setSelectedStockItemId("");
     setQuantidadeUsada("");
+    setIngredientSearch("");
   };
 
   const handleRemoveIngredient = (index: number) => {
@@ -193,53 +216,55 @@ export function RecipeForm({
         <div className="flex items-end gap-2">
           <div className="flex-1 space-y-2">
             <Label>Item do Estoque</Label>
-            <Popover open={isIngredientSelectOpen} onOpenChange={setIsIngredientSelectOpen} modal>
-              <PopoverTrigger asChild>
-                <Button
-                  type="button"
-                  variant="outline"
-                  role="combobox"
-                  aria-expanded={isIngredientSelectOpen}
-                  className="w-full justify-between"
-                  disabled={isLoadingStock || !stockItems?.length}
-                >
-                  {selectedStockItemId
-                    ? stockItems?.find((item) => item.id === selectedStockItemId)?.nome
-                    : "Selecione um ingrediente..."}
-                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-                <Command>
-                  <CommandInput placeholder="Pesquisar ingrediente..." />
-                  <CommandList>
-                    <CommandEmpty>
-                      {stockItems?.length ? "Nenhum ingrediente encontrado." : "Nenhum ingrediente disponível."}
-                    </CommandEmpty>
-                    <CommandGroup>
-                      {sortedStockItems.map((item) => (
-                        <CommandItem
-                          key={item.id}
-                          value={`${item.nome} ${item.id}`}
-                          onSelect={() => {
-                            setSelectedStockItemId(item.id);
-                            setIsIngredientSelectOpen(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              selectedStockItemId === item.id ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                          {item.nome}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  </CommandList>
-                </Command>
-              </PopoverContent>
-            </Popover>
+            <Select
+              value={selectedStockItemId}
+              onOpenChange={(open) => {
+                setIsIngredientSelectOpen(open);
+                if (!open) setIngredientSearch("");
+              }}
+              onValueChange={(value) => {
+                setSelectedStockItemId(value);
+                setIngredientSearch("");
+              }}
+              disabled={isLoadingStock || !stockItems?.length}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione um ingrediente..." />
+              </SelectTrigger>
+              <SelectContent container={selectContainer ?? undefined}>
+                {!isLoadingStock && !!stockItems?.length && (
+                  <div className="sticky top-0 z-10 bg-popover p-1">
+                    <Input
+                      ref={ingredientSearchInputRef}
+                      value={ingredientSearch}
+                      onChange={(event) => setIngredientSearch(event.target.value)}
+                      onPointerDown={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
+                      placeholder="Pesquisar ingrediente..."
+                    />
+                  </div>
+                )}
+                {isLoadingStock ? (
+                  <SelectItem value="loading" disabled>
+                    Carregando...
+                  </SelectItem>
+                ) : filteredStockItems.length ? (
+                  filteredStockItems.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.nome}
+                    </SelectItem>
+                  ))
+                ) : stockItems?.length ? (
+                  <SelectItem value="empty-filtered" disabled>
+                    Nenhum ingrediente encontrado.
+                  </SelectItem>
+                ) : (
+                  <SelectItem value="empty" disabled>
+                    Nenhum ingrediente disponível.
+                  </SelectItem>
+                )}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="w-32 space-y-2">

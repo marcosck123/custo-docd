@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { collection, doc, serverTimestamp } from "firebase/firestore";
 import { Edit, PlusCircle, Trash2 } from "lucide-react";
 
@@ -30,6 +30,7 @@ export function RecipeManager({ recipeType, title, description, collectionName }
   const firestore = useFirestore();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<DoughRecipe | FillingRecipe | null>(null);
+  const [dialogContentElement, setDialogContentElement] = useState<HTMLDivElement | null>(null);
 
   const recipesQuery = useMemoFirebase(
     () => (firestore ? collection(firestore, collectionName) : null),
@@ -73,6 +74,10 @@ export function RecipeManager({ recipeType, title, description, collectionName }
     setIsFormOpen(true);
   };
 
+  const handleDialogContentRef = useCallback((node: HTMLDivElement | null) => {
+    setDialogContentElement(node);
+  }, []);
+
   return (
     <Card>
       <CardHeader>
@@ -88,7 +93,7 @@ export function RecipeManager({ recipeType, title, description, collectionName }
                 Nova Receita
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent ref={handleDialogContentRef} className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>{editingRecipe ? "Editar Receita" : `Nova Receita de ${title}`}</DialogTitle>
               </DialogHeader>
@@ -100,6 +105,7 @@ export function RecipeManager({ recipeType, title, description, collectionName }
                 stockItems={stockItems}
                 isLoadingStock={isLoadingStock}
                 recipeToEdit={editingRecipe}
+                selectContainer={dialogContentElement}
               />
             </DialogContent>
           </Dialog>
