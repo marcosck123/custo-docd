@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from '@/components/ui/button';
@@ -10,13 +10,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Trash2, Edit, Save, XCircle } from 'lucide-react';
+import { Check, ChevronsUpDown, PlusCircle, Trash2, Edit, Save, XCircle } from 'lucide-react';
 import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
 import { collection, doc, serverTimestamp } from 'firebase/firestore';
 import { addDocumentNonBlocking, deleteDocumentNonBlocking, updateDocumentNonBlocking } from '@/firebase/non-blocking-updates';
 import type { StockItem, RecipeIngredient, DoughRecipe, FillingRecipe, FinalProduct } from '@/lib/types';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { cn } from '@/lib/utils';
 const formatCurrency = (value: number | null | undefined) => {
   if (value === null || value === undefined || isNaN(value) || !isFinite(value)) {
     return "R$ 0,00";
@@ -31,8 +34,7 @@ const RecipeForm = ({
   closeDialog,
   stockItems,
   isLoadingStock,
-  recipeToEdit,
-  selectContainer
+  recipeToEdit
 }: {
   recipeType: 'dough' | 'filling';
   onSave: (data: any) => void;
@@ -40,7 +42,6 @@ const RecipeForm = ({
   stockItems: StockItem[] | null;
   isLoadingStock: boolean;
   recipeToEdit?: DoughRecipe | FillingRecipe | null;
-  selectContainer?: HTMLElement | null;
 }) => {
   const { toast } = useToast();
 
@@ -63,9 +64,7 @@ const RecipeForm = ({
 
   const [selectedStockItemId, setSelectedStockItemId] = useState('');
   const [quantidadeUsada, setQuantidadeUsada] = useState('');
-  const [ingredientSearch, setIngredientSearch] = useState('');
   const [isIngredientSelectOpen, setIsIngredientSelectOpen] = useState(false);
-  const ingredientSearchInputRef = useRef<HTMLInputElement | null>(null);
 
   const sortedStockItems = useMemo(() => {
     if (!stockItems) return [];
@@ -75,31 +74,10 @@ const RecipeForm = ({
     );
   }, [stockItems]);
 
-  const filteredStockItems = useMemo(() => {
-    const normalizedSearch = ingredientSearch.trim().toLowerCase();
-
-    if (!normalizedSearch) return sortedStockItems;
-
-    return sortedStockItems.filter((item) =>
-      item.nome.toLowerCase().includes(normalizedSearch)
-    );
-  }, [ingredientSearch, sortedStockItems]);
-
   // Recalculate costs if stock item prices change
   useEffect(() => {
     setIngredientes(ings => ings.map(ing => ({ ...ing, custo: calculateIngredientCost(ing) })));
   }, [calculateIngredientCost]);
-
-  useEffect(() => {
-    if (!isIngredientSelectOpen) return;
-
-    const focusId = window.requestAnimationFrame(() => {
-      ingredientSearchInputRef.current?.focus();
-    });
-
-    return () => window.cancelAnimationFrame(focusId);
-  }, [isIngredientSelectOpen]);
-
 
   const handleAddIngredient = () => {
     const stockItem = stockItems?.find(item => item.id === selectedStockItemId);
@@ -120,7 +98,6 @@ const RecipeForm = ({
     setIngredientes([...ingredientes, newIngredient]);
     setSelectedStockItemId('');
     setQuantidadeUsada('');
-    setIngredientSearch('');
   };
 
   const handleRemoveIngredient = (index: number) => {
@@ -200,50 +177,56 @@ const RecipeForm = ({
         <div className="flex items-end gap-2">
           <div className="flex-1 space-y-2">
             <Label>Item do Estoque</Label>
-            <Select
-              value={selectedStockItemId}
-              onOpenChange={(open) => {
-                setIsIngredientSelectOpen(open);
-
-                if (!open) {
-                  setIngredientSearch('');
-                }
-              }}
-              onValueChange={(value) => {
-                setSelectedStockItemId(value);
-                setIngredientSearch('');
-              }}
-              disabled={isLoadingStock || !stockItems?.length}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione um ingrediente..." />
-              </SelectTrigger>
-              <SelectContent container={selectContainer ?? undefined}>
-                {!isLoadingStock && !!stockItems?.length && (
-                  <div className="sticky top-0 z-10 bg-popover p-1">
-                    <Input
-                      ref={ingredientSearchInputRef}
-                      value={ingredientSearch}
-                      onChange={(event) => setIngredientSearch(event.target.value)}
-                      onPointerDown={(event) => event.stopPropagation()}
-                      onKeyDown={(event) => event.stopPropagation()}
-                      placeholder="Pesquisar ingrediente..."
-                    />
-                  </div>
-                )}
-                {isLoadingStock ? (
-                  <SelectItem value="loading-stock-items" disabled>Carregando...</SelectItem>
-                ) : filteredStockItems.length ? (
-                  filteredStockItems.map((item) => (
-                    <SelectItem key={item.id} value={item.id}>{item.nome}</SelectItem>
-                  ))
-                ) : stockItems?.length ? (
-                  <SelectItem value="empty-filtered-stock-items" disabled>Nenhum ingrediente encontrado.</SelectItem>
-                ) : (
-                  <SelectItem value="empty-stock-items" disabled>Nenhum ingrediente disponível.</SelectItem>
-                )}
-              </SelectContent>
-            </Select>
+            <Popover open={isIngredientSelectOpen} onOpenChange={setIsIngredientSelectOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={isIngredientSelectOpen}
+                  className="w-full justify-between"
+                  disabled={isLoadingStock || !stockItems?.length}
+                >
+                  {selectedStockItemId
+                    ? stockItems?.find((item) => item.id === selectedStockItemId)?.nome
+                    : "Selecione um ingrediente..."}
+                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-[var(--radix-popover-trigger-width)] p-0"
+                align="start"
+              >
+                <Command>
+                  <CommandInput placeholder="Pesquisar ingrediente..." />
+                  <CommandList>
+                    <CommandEmpty>
+                      {stockItems?.length ? "Nenhum ingrediente encontrado." : "Nenhum ingrediente disponível."}
+                    </CommandEmpty>
+                    <CommandGroup>
+                      {sortedStockItems.map((item) => (
+                        <CommandItem
+                          key={item.id}
+                          value={`${item.nome} ${item.id}`}
+                          onSelect={() => {
+                            setSelectedStockItemId(item.id);
+                            setIsIngredientSelectOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              selectedStockItemId === item.id ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          {item.nome}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
           <div className="w-32 space-y-2">
             <Label>Qtd. Usada</Label>
@@ -276,11 +259,6 @@ const RecipeManager = ({ recipeType, title, description, collectionName }: { rec
     // State & Data
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingRecipe, setEditingRecipe] = useState<DoughRecipe | FillingRecipe | null>(null);
-    const [dialogContentElement, setDialogContentElement] = useState<HTMLDivElement | null>(null);
-    const handleDialogContentRef = useCallback((node: HTMLDivElement | null) => {
-        setDialogContentElement(node);
-    }, []);
-
     const recipesQuery = useMemoFirebase(() => firestore ? collection(firestore, collectionName) : null, [firestore, collectionName]);
     const { data: recipes, isLoading: isLoadingRecipes } = useCollection<DoughRecipe | FillingRecipe>(recipesQuery);
 
@@ -330,7 +308,7 @@ const RecipeManager = ({ recipeType, title, description, collectionName }: { rec
                         <DialogTrigger asChild>
                             <Button onClick={openFormForNew} size="sm"><PlusCircle className="mr-2 h-4 w-4"/>Nova Receita</Button>
                         </DialogTrigger>
-                        <DialogContent ref={handleDialogContentRef} className="max-w-2xl">
+                        <DialogContent className="max-w-2xl">
                             <DialogHeader>
                                 <DialogTitle>{editingRecipe ? `Editar Receita` : `Nova Receita de ${title}`}</DialogTitle>
                             </DialogHeader>
@@ -342,7 +320,6 @@ const RecipeManager = ({ recipeType, title, description, collectionName }: { rec
                                 stockItems={stockItems}
                                 isLoadingStock={isLoadingStock}
                                 recipeToEdit={editingRecipe}
-                                selectContainer={dialogContentElement}
                             />
                         </DialogContent>
                     </Dialog>
@@ -691,7 +668,6 @@ export function RecipeFlow() {
         <TabsTrigger value="creator">Nova Receita</TabsTrigger>
         <TabsTrigger value="saved">Produtos Salvos</TabsTrigger>
       </TabsList>
-
       <TabsContent value="creator">
         <Tabs defaultValue="dough" className="w-full mt-4">
           <TabsList className="grid w-full grid-cols-3">
@@ -703,14 +679,13 @@ export function RecipeFlow() {
             <RecipeManager recipeType="dough" title="Massa" description="Crie e gerencie suas receitas de massa." collectionName="receitas_massa" />
           </TabsContent>
           <TabsContent value="filling" className="mt-4">
-            <RecipeManager recipeType="filling" title="Recheio" description="Crie e gerencie suas receitas de recheio." collectionName="receitas_recheio" />
+             <RecipeManager recipeType="filling" title="Recheio" description="Crie e gerencie suas receitas de recheio." collectionName="receitas_recheio" />
           </TabsContent>
           <TabsContent value="product" className="mt-4">
             <FinalProductManager />
           </TabsContent>
         </Tabs>
       </TabsContent>
-
       <TabsContent value="saved" className="mt-4">
         <SavedProductsManager />
       </TabsContent>
