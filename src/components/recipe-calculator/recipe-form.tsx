@@ -193,7 +193,7 @@ export function RecipeForm({
         <div className="flex items-end gap-2">
           <div className="flex-1 space-y-2">
             <Label>Item do Estoque</Label>
-            <Popover open={isIngredientSelectOpen} onOpenChange={setIsIngredientSelectOpen}>
+            <Popover open={isIngredientSelectOpen} onOpenChange={setIsIngredientSelectOpen} modal>
               <PopoverTrigger asChild>
                 <Button
                   type="button"
