@@ -1,6 +1,7 @@
 import type { Timestamp } from 'firebase/firestore';
 
 export type Unidade = 'MG' | 'G' | 'KG' | 'ML' | 'L' | 'UN';
+export type EntryMeasure = 'G' | 'KG' | 'ML' | 'L' | 'UN';
 
 export type StockItem = {
   id: string;
@@ -75,4 +76,62 @@ export type FinalProduct = {
   custoTotal: number;
   custoUnitario: number;
   dataCriacao?: Timestamp;
+};
+
+export type Platform = {
+  id: string;
+  nome: string;
+  cobraTaxa: boolean;
+  taxa: number;
+};
+
+export type Market = {
+  id: string;
+  nome: string;
+};
+
+export type SaleRecord = {
+  id: string;
+  data: string;
+  produto: string;
+  plataforma: string;
+  taxaAplicada: number;
+  precoVenda: number;
+  valorFinal: number;
+};
+
+export type StockEntryRecord = {
+  id: string;
+  data: string;
+  produto: string;
+  mercado: string;
+  valorPago: number;
+  medida: EntryMeasure | '';
+  quantidade: number | null;
+};
+
+export type WalletPocket = 'banco' | 'caixa';
+
+export type WalletTransaction = {
+  id: string;
+  tipo: 'entrada' | 'saida';
+  categoria: string;
+  descricao: string;
+  valor: number;
+  bolso: WalletPocket;
+  data: string;
+};
+
+export type WalletData = {
+  banco: number;
+  caixa: number;
+  transacoes: WalletTransaction[];
+};
+
+export type CardInfo = {
+  nomeNegocio: string;
+  responsavel: string;
+  documento: string;
+  telefone: string;
+  observacoes: string;
 };

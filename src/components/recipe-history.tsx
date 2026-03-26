@@ -52,7 +52,7 @@ const StockItemForm = ({ item, onSave, closeDialog }: { item?: StockItem, onSave
             return;
         }
 
-        onSave({ nome, preco: precoNum, peso: pesoNum, unidade, categoria });
+        onSave({ nome, preco: precoNum, peso: pesoNum, unidade: unidade as StockItem['unidade'], categoria });
         closeDialog();
     };
 

@@ -82,3 +82,47 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  .wallet-card {
+    background:
+      radial-gradient(circle at top right, rgba(255, 255, 255, 0.24), transparent 32%),
+      linear-gradient(135deg, rgba(255, 202, 155, 0.3), rgba(92, 43, 29, 0.75)),
+      linear-gradient(160deg, #6f2f19 0%, #3f1c12 48%, #211616 100%);
+  }
+
+  .wallet-card__shine {
+    position: absolute;
+    inset: -40%;
+    background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.2) 48%, transparent 65%);
+    transform: rotate(12deg);
+    animation: wallet-shine 7s linear infinite;
+  }
+
+  .wallet-chip {
+    width: 4.5rem;
+    height: 3.2rem;
+    border-radius: 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background:
+      linear-gradient(135deg, rgba(255, 233, 173, 0.95), rgba(190, 145, 57, 0.8)),
+      linear-gradient(90deg, transparent 42%, rgba(120, 86, 18, 0.55) 42%, rgba(120, 86, 18, 0.55) 58%, transparent 58%);
+    box-shadow: inset 0 0 0 1px rgba(120, 86, 18, 0.2);
+  }
+}
+
+@keyframes wallet-shine {
+  0% {
+    transform: translateX(-45%) rotate(12deg);
+  }
+  100% {
+    transform: translateX(55%) rotate(12deg);
+  }
+}
+
+@media (max-width: 480px) {
+  .wallet-chip {
+    width: 3.8rem;
+    height: 2.8rem;
+  }
+}

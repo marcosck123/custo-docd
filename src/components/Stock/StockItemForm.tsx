@@ -122,7 +122,7 @@ export const StockItemForm = ({
 
       <div className="space-y-2">
         <Label htmlFor="unidade">Unidade de Medida</Label>
-        <Select value={unidade} onValueChange={setUnidade}>
+        <Select value={unidade} onValueChange={(value) => setUnidade(value as StockItem['unidade'])}>
           <SelectTrigger id="unidade">
             <SelectValue placeholder="Selecione a unidade" />
           </SelectTrigger>

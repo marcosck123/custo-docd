@@ -6,8 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PlusCircle, Trash2, Edit, RefreshCw } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Trash2, Edit, RefreshCw } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
@@ -18,11 +18,13 @@ import type { StockItem } from '@/lib/types';
 import { StockItemForm } from './StockItemForm';
 import { formatCurrency, formatDate } from '@/lib/formatters';
 import { CostAlertManager } from './CostAlertManager';
+import { ItemEntryDialog } from './ItemEntryDialog';
 
 export function StockManager() {
   const { toast } = useToast();
   const firestore = useFirestore();
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isEntryOpen, setIsEntryOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<StockItem | undefined>(undefined);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
@@ -94,24 +96,12 @@ export function StockManager() {
               <RefreshCw className="mr-2 h-4 w-4" /> Recalcular Produtos
             </Button>
 
-            {/* Botão Adicionar Item */}
-            <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-              <DialogTrigger asChild>
-                <Button onClick={() => { setEditingItem(undefined); setIsFormOpen(true); }} size="sm">
-                  <PlusCircle className="mr-2 h-4 w-4" /> Adicionar Item
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>{editingItem ? 'Editar Item' : 'Adicionar Novo Item'}</DialogTitle>
-                </DialogHeader>
-                <StockItemForm
-                  item={editingItem}
-                  onSave={handleSave}
-                  closeDialog={() => setIsFormOpen(false)}
-                />
-              </DialogContent>
-            </Dialog>
+            <ItemEntryDialog
+              firestore={firestore}
+              stockItems={stockItems ?? []}
+              open={isEntryOpen}
+              onOpenChange={setIsEntryOpen}
+            />
           </div>
         </CardHeader>
 
@@ -185,6 +175,19 @@ export function StockManager() {
           </Tabs>
         </CardContent>
       </Card>
+
+      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Item</DialogTitle>
+          </DialogHeader>
+          <StockItemForm
+            item={editingItem}
+            onSave={handleSave}
+            closeDialog={() => setIsFormOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* Alerta de impacto nos produtos */}
       {showCostAlert && (

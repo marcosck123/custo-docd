@@ -1,0 +1,243 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { collection } from "firebase/firestore";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import {
+  createId,
+  createWalletTransaction,
+  formatCurrencyBRL,
+  getPlatforms,
+  getSales,
+  parseCurrencyInput,
+  registerWalletTransaction,
+  saveSales,
+} from "@/lib/business-storage";
+import type { Platform, SaleRecord, StockItem } from "@/lib/types";
+import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
+
+export function SalesManager() {
+  const { toast } = useToast();
+  const firestore = useFirestore();
+  const stockQuery = useMemoFirebase(() => (firestore ? collection(firestore, "estoque") : null), [firestore]);
+  const { data: stockItems } = useCollection<StockItem>(stockQuery);
+
+  const [platforms, setPlatforms] = useState<Platform[]>([]);
+  const [sales, setSales] = useState<SaleRecord[]>([]);
+  const [produto, setProduto] = useState("");
+  const [plataformaId, setPlataformaId] = useState("");
+  const [precoVenda, setPrecoVenda] = useState("");
+
+  useEffect(() => {
+    setPlatforms(getPlatforms());
+    setSales(getSales());
+  }, []);
+
+  const selectedPlatform = useMemo(
+    () => platforms.find((platform) => platform.id === plataformaId) ?? null,
+    [platforms, plataformaId]
+  );
+
+  const salePreview = useMemo(() => {
+    const price = parseCurrencyInput(precoVenda);
+
+    if (Number.isNaN(price) || price <= 0) return null;
+
+    const tax = selectedPlatform?.cobraTaxa ? selectedPlatform.taxa : 0;
+    const discount = price * (tax / 100);
+    return {
+      price,
+      tax,
+      discount,
+      net: price - discount,
+    };
+  }, [precoVenda, selectedPlatform]);
+
+  const sortedStock = useMemo(
+    () => [...(stockItems ?? [])].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })),
+    [stockItems]
+  );
+
+  const sortedSales = useMemo(
+    () => [...sales].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime()),
+    [sales]
+  );
+
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!produto || !selectedPlatform || !salePreview) {
+      toast({
+        title: "Campos incompletos",
+        description: "Selecione produto, plataforma e informe um preço válido.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const newSale: SaleRecord = {
+      id: createId(),
+      data: new Date().toISOString(),
+      produto,
+      plataforma: selectedPlatform.nome,
+      taxaAplicada: salePreview.tax,
+      precoVenda: salePreview.price,
+      valorFinal: salePreview.net,
+    };
+
+    const nextSales = [newSale, ...sales];
+    setSales(nextSales);
+    saveSales(nextSales);
+
+    registerWalletTransaction(
+      createWalletTransaction({
+        tipo: "entrada",
+        categoria: "Venda de Produto",
+        descricao: `Venda - ${produto} - ${selectedPlatform.nome}`,
+        valor: salePreview.net,
+        bolso: "banco",
+      })
+    );
+
+    setProduto("");
+    setPlataformaId("");
+    setPrecoVenda("");
+
+    toast({
+      title: "Venda registrada",
+      description: "A venda foi salva e o valor líquido entrou automaticamente na carteira.",
+    });
+  };
+
+  return (
+    <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle>Registrar Venda</CardTitle>
+          <CardDescription>Selecione o item, aplique a plataforma e confira o valor líquido antes de confirmar.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Produto</Label>
+              <Select value={produto} onValueChange={setProduto}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione um produto do estoque" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sortedStock.length ? (
+                    sortedStock.map((item) => (
+                      <SelectItem key={item.id} value={item.nome}>
+                        {item.nome}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="empty-stock" disabled>
+                      Nenhum produto disponível
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Plataforma</Label>
+              <Select value={plataformaId} onValueChange={setPlataformaId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a plataforma" />
+                </SelectTrigger>
+                <SelectContent>
+                  {platforms.length ? (
+                    platforms.map((platform) => (
+                      <SelectItem key={platform.id} value={platform.id}>
+                        {platform.nome}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value="empty-platform" disabled>
+                      Cadastre uma plataforma primeiro
+                    </SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="sale-price">Preço de Venda (R$)</Label>
+              <Input
+                id="sale-price"
+                value={precoVenda}
+                onChange={(event) => setPrecoVenda(event.target.value)}
+                placeholder="Ex: 50,00"
+              />
+            </div>
+
+            {salePreview && (
+              <div className="rounded-2xl border bg-primary/5 p-4">
+                <p className="text-sm text-muted-foreground">Resumo da venda</p>
+                <div className="mt-3 space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span>Preço digitado</span>
+                    <span>{formatCurrencyBRL(salePreview.price)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Taxa da plataforma</span>
+                    <span>{salePreview.tax}%</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Desconto da taxa</span>
+                    <span>{formatCurrencyBRL(salePreview.discount)}</span>
+                  </div>
+                  <div className="flex items-center justify-between border-t pt-2 text-base font-semibold text-primary">
+                    <span>Valor final recebido</span>
+                    <span>{formatCurrencyBRL(salePreview.net)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <Button type="submit" className="w-full">
+              Registrar Venda
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card className="shadow-sm">
+        <CardHeader>
+          <CardTitle>Últimas Vendas</CardTitle>
+          <CardDescription>Histórico salvo localmente para conferência rápida.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {sortedSales.length ? (
+            sortedSales.slice(0, 8).map((sale) => (
+              <div key={sale.id} className="rounded-2xl border p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-medium">{sale.produto}</p>
+                    <p className="text-sm text-muted-foreground">{sale.plataforma}</p>
+                  </div>
+                  <p className="font-semibold text-primary">{formatCurrencyBRL(sale.valorFinal)}</p>
+                </div>
+                <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>Venda: {formatCurrencyBRL(sale.precoVenda)}</span>
+                  <span>Taxa: {sale.taxaAplicada}%</span>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+              Nenhuma venda registrada ainda.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
