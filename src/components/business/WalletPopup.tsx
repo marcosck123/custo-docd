@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CreditCard, Landmark, Wallet, ArrowDownCircle, ArrowUpCircle, RotateCcw } from "lucide-react";
+import { CreditCard, Landmark, Wallet, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -14,15 +14,13 @@ import { useToast } from "@/hooks/use-toast";
 import {
   createWalletTransaction,
   formatCurrencyBRL,
-  getCardInfo,
   getPocketLabel,
   getWallet,
   getWalletTotal,
   parseCurrencyInput,
   registerWalletTransaction,
-  saveCardInfo,
 } from "@/lib/business-storage";
-import type { CardInfo, WalletData, WalletPocket } from "@/lib/types";
+import type { WalletData, WalletPocket } from "@/lib/types";
 
 type FlowType = "entrada" | "saida" | null;
 
@@ -58,8 +56,6 @@ export function WalletPopup({
 }) {
   const { toast } = useToast();
   const [wallet, setWallet] = useState<WalletData>(getWallet());
-  const [cardInfo, setCardInfo] = useState<CardInfo>(getCardInfo());
-  const [isFlipped, setIsFlipped] = useState(false);
   const [flowType, setFlowType] = useState<FlowType>(null);
   const [draft, setDraft] = useState<TransactionDraft>({
     categoria: "",
@@ -68,12 +64,10 @@ export function WalletPopup({
     bolso: "banco",
     descricao: "",
   });
-  const [editingField, setEditingField] = useState<keyof CardInfo | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setWallet(getWallet());
-    setCardInfo(getCardInfo());
   }, [open]);
 
   const total = useMemo(() => getWalletTotal(wallet), [wallet]);
@@ -88,13 +82,6 @@ export function WalletPopup({
       bolso: type === "saida" ? "caixa" : "banco",
       descricao: "",
     });
-  };
-
-  const handleCardInfoSave = (field: keyof CardInfo, value: string) => {
-    const nextInfo = { ...cardInfo, [field]: value };
-    setCardInfo(nextInfo);
-    saveCardInfo(nextInfo);
-    setEditingField(null);
   };
 
   const handleTransactionSubmit = (event: React.FormEvent) => {
@@ -150,135 +137,81 @@ export function WalletPopup({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-4xl border-0 bg-transparent p-0 shadow-none">
-          <div className="rounded-[2rem] border bg-background/95 p-5 shadow-2xl backdrop-blur md:p-8">
-            <DialogHeader className="mb-4">
-              <DialogTitle className="flex items-center gap-2 text-2xl">
+        <DialogContent className="max-w-6xl border-0 bg-transparent p-0 shadow-none">
+          <div className="rounded-[2.25rem] border bg-background/95 p-6 shadow-2xl backdrop-blur md:p-10">
+            <DialogHeader className="mb-6">
+              <DialogTitle className="flex items-center gap-2 text-2xl md:text-3xl">
                 <CreditCard className="h-6 w-6 text-primary" />
                 Carteira
               </DialogTitle>
               <DialogDescription>Banco e caixa separados em um único painel com lançamento manual.</DialogDescription>
             </DialogHeader>
 
-            <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-              <div className="perspective-[1600px]">
-                <div
-                  className={`relative min-h-[320px] w-full transition-transform duration-700 [transform-style:preserve-3d] ${
-                    isFlipped ? "[transform:rotateY(180deg)]" : ""
-                  }`}
-                >
-                  <div className="absolute inset-0 [backface-visibility:hidden]">
-                    <div className="wallet-card relative h-full overflow-hidden rounded-[1.75rem] border border-white/15 p-6 text-white shadow-[0_30px_80px_rgba(0,0,0,0.35)]">
-                      <div className="wallet-card__shine" />
-                      <div className="relative z-10 flex h-full flex-col justify-between">
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <p className="text-xs uppercase tracking-[0.35em] text-white/60">Carteira Digital</p>
-                            <h3 className="mt-2 text-2xl font-semibold">{cardInfo.nomeNegocio || "Minha Empresa"}</h3>
-                          </div>
-                          <div className="wallet-chip" aria-hidden="true" />
-                        </div>
-
-                        <div>
-                          <p className="text-sm text-white/70">Saldo total</p>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button type="button" className="mt-2 text-left text-4xl font-bold tracking-tight">
-                                {formatCurrencyBRL(total)}
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="space-y-1">
-                              <p className="flex items-center gap-2"><Landmark className="h-4 w-4" /> Banco: {formatCurrencyBRL(wallet.banco)}</p>
-                              <p className="flex items-center gap-2"><Wallet className="h-4 w-4" /> Caixa: {formatCurrencyBRL(wallet.caixa)}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-
-                        <div className="flex flex-wrap gap-3">
-                          <Button type="button" variant="secondary" onClick={() => resetDraft("entrada")}>
-                            <ArrowDownCircle className="mr-2 h-4 w-4" />
-                            Registrar Entrada
-                          </Button>
-                          <Button type="button" variant="outline" className="border-white/25 bg-transparent text-white hover:bg-white/10 hover:text-white" onClick={() => resetDraft("saida")}>
-                            <ArrowUpCircle className="mr-2 h-4 w-4" />
-                            Registrar Saída
-                          </Button>
-                          <Button type="button" variant="ghost" className="text-white hover:bg-white/10 hover:text-white" onClick={() => setIsFlipped(true)}>
-                            Virar Cartão
-                          </Button>
-                        </div>
+            <div className="grid gap-8 lg:grid-cols-[1.3fr_0.7fr]">
+              <div>
+                <div className="wallet-card relative min-h-[420px] overflow-hidden rounded-[2rem] border border-white/15 p-8 text-white shadow-[0_30px_80px_rgba(0,0,0,0.35)] md:min-h-[520px] md:p-10">
+                  <div className="wallet-card__shine" />
+                  <div className="relative z-10 flex h-full flex-col justify-between">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.35em] text-white/60">Carteira Digital</p>
+                        <h3 className="mt-3 text-3xl font-semibold md:text-4xl">Minha Empresa</h3>
                       </div>
+                      <div className="wallet-chip" aria-hidden="true" />
                     </div>
-                  </div>
 
-                  <div className="absolute inset-0 [backface-visibility:hidden] [transform:rotateY(180deg)]">
-                    <div className="relative flex h-full flex-col justify-between overflow-hidden rounded-[1.75rem] border border-white/15 bg-slate-900 p-6 text-white shadow-[0_30px_80px_rgba(0,0,0,0.35)]">
-                      <div className="absolute inset-x-0 top-8 h-12 bg-black/50" />
-                      <div className="relative z-10 mt-16 space-y-4">
-                        <EditableLine
-                          label="Nome do Negócio"
-                          value={cardInfo.nomeNegocio}
-                          isEditing={editingField === "nomeNegocio"}
-                          onEdit={() => setEditingField("nomeNegocio")}
-                          onSave={(value) => handleCardInfoSave("nomeNegocio", value)}
-                        />
-                        <EditableLine
-                          label="Responsável / Proprietário"
-                          value={cardInfo.responsavel}
-                          isEditing={editingField === "responsavel"}
-                          onEdit={() => setEditingField("responsavel")}
-                          onSave={(value) => handleCardInfoSave("responsavel", value)}
-                        />
-                        <EditableLine
-                          label="CNPJ ou CPF"
-                          value={cardInfo.documento}
-                          isEditing={editingField === "documento"}
-                          onEdit={() => setEditingField("documento")}
-                          onSave={(value) => handleCardInfoSave("documento", value)}
-                        />
-                        <EditableLine
-                          label="Telefone"
-                          value={cardInfo.telefone}
-                          isEditing={editingField === "telefone"}
-                          onEdit={() => setEditingField("telefone")}
-                          onSave={(value) => handleCardInfoSave("telefone", value)}
-                        />
-                        <EditableLine
-                          label="Observações"
-                          value={cardInfo.observacoes}
-                          isEditing={editingField === "observacoes"}
-                          onEdit={() => setEditingField("observacoes")}
-                          onSave={(value) => handleCardInfoSave("observacoes", value)}
-                        />
-                      </div>
-                      <div className="relative z-10 flex justify-end">
-                        <Button type="button" variant="secondary" onClick={() => setIsFlipped(false)}>
-                          <RotateCcw className="mr-2 h-4 w-4" />
-                          Voltar
-                        </Button>
-                      </div>
+                    <div>
+                      <p className="text-base text-white/70">Saldo total</p>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button type="button" className="mt-3 text-left text-5xl font-bold tracking-tight md:text-6xl">
+                            {formatCurrencyBRL(total)}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="space-y-1">
+                          <p className="flex items-center gap-2"><Landmark className="h-4 w-4" /> Banco: {formatCurrencyBRL(wallet.banco)}</p>
+                          <p className="flex items-center gap-2"><Wallet className="h-4 w-4" /> Caixa: {formatCurrencyBRL(wallet.caixa)}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                      <Button type="button" size="lg" variant="secondary" onClick={() => resetDraft("entrada")}>
+                        <ArrowDownCircle className="mr-2 h-4 w-4" />
+                        Registrar Entrada
+                      </Button>
+                      <Button
+                        type="button"
+                        size="lg"
+                        variant="outline"
+                        className="border-white/25 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                        onClick={() => resetDraft("saida")}
+                      >
+                        <ArrowUpCircle className="mr-2 h-4 w-4" />
+                        Registrar Saída
+                      </Button>
                     </div>
                   </div>
                 </div>
               </div>
 
               <div className="space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-2xl border bg-card/70 p-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+                  <div className="rounded-2xl border bg-card/70 p-5">
                     <p className="text-sm text-muted-foreground">Banco</p>
-                    <p className="mt-2 text-2xl font-semibold">{formatCurrencyBRL(wallet.banco)}</p>
+                    <p className="mt-2 text-3xl font-semibold">{formatCurrencyBRL(wallet.banco)}</p>
                   </div>
-                  <div className="rounded-2xl border bg-card/70 p-4">
+                  <div className="rounded-2xl border bg-card/70 p-5">
                     <p className="text-sm text-muted-foreground">Caixa</p>
-                    <p className="mt-2 text-2xl font-semibold">{formatCurrencyBRL(wallet.caixa)}</p>
+                    <p className="mt-2 text-3xl font-semibold">{formatCurrencyBRL(wallet.caixa)}</p>
                   </div>
                 </div>
 
-                <div className="rounded-2xl border bg-card/60 p-4">
+                <div className="rounded-2xl border bg-card/60 p-5">
                   <p className="font-semibold">Últimas transações</p>
                   <div className="mt-4 space-y-3">
                     {wallet.transacoes.length ? (
-                      wallet.transacoes.slice(0, 6).map((transaction) => (
+                      wallet.transacoes.slice(0, 7).map((transaction) => (
                         <div key={transaction.id} className="flex items-start justify-between gap-3 rounded-xl border p-3">
                           <div>
                             <p className="font-medium">{transaction.categoria}</p>
@@ -386,44 +319,5 @@ export function WalletPopup({
         </DialogContent>
       </Dialog>
     </>
-  );
-}
-
-function EditableLine({
-  label,
-  value,
-  isEditing,
-  onEdit,
-  onSave,
-}: {
-  label: string;
-  value: string;
-  isEditing: boolean;
-  onEdit: () => void;
-  onSave: (value: string) => void;
-}) {
-  const [draft, setDraft] = useState(value);
-
-  useEffect(() => {
-    setDraft(value);
-  }, [value]);
-
-  return (
-    <div>
-      <p className="text-[11px] uppercase tracking-[0.25em] text-white/45">{label}</p>
-      {isEditing ? (
-        <Input
-          autoFocus
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onBlur={() => onSave(draft)}
-          className="mt-1 border-white/20 bg-white/10 text-white"
-        />
-      ) : (
-        <button type="button" onClick={onEdit} className="mt-1 text-left text-sm text-white/90">
-          {value || "Clique para editar"}
-        </button>
-      )}
-    </div>
   );
 }
