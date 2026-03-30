@@ -45,6 +45,7 @@ export type SelectedRecipeItem = {
 export type FinalProduct = {
   id: string;
   nome: string;
+  tipo?: 'produto_final';
 
   // Múltiplas massas/recheios
   massas?: SelectedRecipeItem[];
@@ -61,7 +62,8 @@ export type FinalProduct = {
   // Custos adicionais
   materialPercentage?: number;
   consumoPercentage?: number;
-  maoDeObra?: number;
+  custoMaoDeObra: number;        // Novo: custo mão de obra em R$
+  lucroPercentual: number;       // Novo: percentual de lucro desejado
 
   // Precificação completa (3 cenários)
   margemLucro?: number;     // legado
@@ -71,6 +73,7 @@ export type FinalProduct = {
   margemVenda?: number;
   precoMinimo?: number;
   precoIdeal?: number;
+  precoSugerido?: number;   // Novo: preço sugerido calculado
 
   quantidadeFinal: number;
   custoTotal: number;
@@ -83,6 +86,8 @@ export type Platform = {
   nome: string;
   cobraTaxa: boolean;
   taxa: number;
+  isApp?: boolean;              // Novo: indica se é aplicativo de delivery
+  comissaoMensal?: number;      // Novo: comissão mensal para aplicativos
 };
 
 export type Market = {
@@ -134,4 +139,16 @@ export type CardInfo = {
   documento: string;
   telefone: string;
   observacoes: string;
+};
+
+export type VendaPendente = {
+  totalBruto: number;
+  comissao: number; // Percentual
+  totalComissao: number;
+  totalLiquido: number;
+  vendasIds: string[];
+};
+
+export type VendasPendentesApps = {
+  [platformId: string]: VendaPendente;
 };

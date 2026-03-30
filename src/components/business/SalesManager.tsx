@@ -11,20 +11,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import {
   createId,
-  createWalletTransaction,
   formatCurrencyBRL,
   getPlatforms,
   getSales,
   parseCurrencyInput,
-  registerWalletTransaction,
   saveSales,
 } from "@/lib/business-storage";
+import { useWallet } from "@/firebase/client-provider";
 import type { Platform, SaleRecord, StockItem } from "@/lib/types";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
 
 export function SalesManager() {
   const { toast } = useToast();
   const firestore = useFirestore();
+  const { addTransaction, addPendingAppSale } = useWallet();
   const stockQuery = useMemoFirebase(() => (firestore ? collection(firestore, "estoque") : null), [firestore]);
   const { data: stockItems } = useCollection<StockItem>(stockQuery);
 
@@ -95,24 +95,29 @@ export function SalesManager() {
     setSales(nextSales);
     saveSales(nextSales);
 
-    registerWalletTransaction(
-      createWalletTransaction({
+    if (selectedPlatform.isApp) {
+      addPendingAppSale(selectedPlatform, salePreview.price);
+      toast({
+        title: "Venda registrada",
+        description: `A venda foi salva e o valor líquido será repassado pela ${selectedPlatform.nome}.`,
+      });
+    } else {
+      addTransaction({
         tipo: "entrada",
         categoria: "Venda de Produto",
         descricao: `Venda - ${produto} - ${selectedPlatform.nome}`,
         valor: salePreview.net,
-        bolso: "banco",
-      })
-    );
+        bolso: "caixa", // Assumindo que vendas diretas vão para o caixa
+      });
+      toast({
+        title: "Venda registrada",
+        description: "A venda foi salva e o valor líquido entrou automaticamente na carteira.",
+      });
+    }
 
     setProduto("");
     setPlataformaId("");
     setPrecoVenda("");
-
-    toast({
-      title: "Venda registrada",
-      description: "A venda foi salva e o valor líquido entrou automaticamente na carteira.",
-    });
   };
 
   return (

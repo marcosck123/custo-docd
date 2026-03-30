@@ -17,7 +17,10 @@ import {
   parseCurrencyInput,
   saveEntries,
 } from "@/lib/business-storage";
-import type { EntryMeasure, Market, StockEntryRecord, StockItem } from "@/lib/types";
+import { encontrarProdutosSimilares } from "@/lib/fuzzy-match";
+import { SimilarProductModal } from "./SimilarProductModal";
+import { useWallet } from "@/firebase/client-provider";
+import type { EntryMeasure, Market, StockEntryRecord, StockItem, WalletPocket } from "@/lib/types";
 import type { Firestore } from "firebase/firestore";
 
 const entryMeasures: { value: EntryMeasure; label: string }[] = [
@@ -37,7 +40,6 @@ type ItemEntryDialogProps = {
 
 export function ItemEntryDialog({ firestore, stockItems, open, onOpenChange }: ItemEntryDialogProps) {
   const { toast } = useToast();
-  const [selectedItemId, setSelectedItemId] = useState("__new__");
   const [newItemName, setNewItemName] = useState("");
   const [marketId, setMarketId] = useState("");
   const [amountPaid, setAmountPaid] = useState("");
@@ -45,6 +47,11 @@ export function ItemEntryDialog({ firestore, stockItems, open, onOpenChange }: I
   const [quantity, setQuantity] = useState("");
   const [category, setCategory] = useState<StockItem["categoria"]>("Ingrediente");
   const [markets, setMarkets] = useState<Market[]>([]);
+  const [showSimilarModal, setShowSimilarModal] = useState(false);
+  const [similarProducts, setSimilarProducts] = useState<StockItem[]>([]);
+  const [selectedSimilarId, setSelectedSimilarId] = useState<string | null>(null);
+  const [walletPocket, setWalletPocket] = useState<WalletPocket>("caixa");
+  const { addTransaction } = useWallet();
 
   useEffect(() => {
     if (open) {
@@ -52,24 +59,15 @@ export function ItemEntryDialog({ firestore, stockItems, open, onOpenChange }: I
     }
   }, [open]);
 
-  const sortedItems = useMemo(
-    () => [...stockItems].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })),
-    [stockItems]
-  );
-
-  const selectedItem = useMemo(
-    () => stockItems.find((item) => item.id === selectedItemId) ?? null,
-    [stockItems, selectedItemId]
-  );
-
   const resetForm = () => {
-    setSelectedItemId("__new__");
     setNewItemName("");
     setMarketId("");
     setAmountPaid("");
     setMeasure("");
     setQuantity("");
     setCategory("Ingrediente");
+    setSimilarProducts([]);
+    setSelectedSimilarId(null);
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -79,7 +77,7 @@ export function ItemEntryDialog({ firestore, stockItems, open, onOpenChange }: I
     const market = markets.find((item) => item.id === marketId);
     const paid = parseCurrencyInput(amountPaid);
     const rawQuantity = measure ? parseCurrencyInput(quantity) : Number.NaN;
-    const productName = selectedItem ? selectedItem.nome : newItemName.trim();
+    const productName = newItemName.trim();
 
     if (!productName || !market || Number.isNaN(paid) || paid <= 0) {
       toast({
@@ -99,18 +97,52 @@ export function ItemEntryDialog({ firestore, stockItems, open, onOpenChange }: I
       return;
     }
 
-    const fallbackUnit = selectedItem?.unidade ?? "UN";
-    const fallbackQuantity = selectedItem?.peso ?? 1;
-    const normalized = measure ? convertToBaseUnit(rawQuantity, measure) : { quantity: fallbackQuantity, unit: fallbackUnit };
+    // Buscar produtos similares
+    const similares = encontrarProdutosSimilares(productName, stockItems);
 
-    if (selectedItem && selectedItem.unidade !== normalized.unit) {
-      toast({
-        title: "Unidade incompatível",
-        description: `O item já está salvo em ${selectedItem.unidade}. Use uma medida compatível para a entrada.`,
-        variant: "destructive",
-      });
+    if (similares.length > 0) {
+      setSimilarProducts(similares);
+      setShowSimilarModal(true);
       return;
     }
+
+    // Se não houver similares, criar novo produto
+    await salvarNovoOuAtualizar(null, productName, paid, rawQuantity, market, normalized);
+  };
+
+  const handleSelectSimilar = async (productId: string) => {
+    const selectedItem = stockItems.find((item) => item.id === productId);
+    if (!selectedItem || !firestore) return;
+
+    const market = markets.find((item) => item.id === marketId);
+    const paid = parseCurrencyInput(amountPaid);
+    const rawQuantity = measure ? parseCurrencyInput(quantity) : Number.NaN;
+    const normalized = measure ? convertToBaseUnit(rawQuantity, measure) : { quantity: selectedItem.peso, unit: selectedItem.unidade };
+
+    await salvarNovoOuAtualizar(selectedItem, selectedItem.nome, paid, rawQuantity, market, normalized);
+  };
+
+  const handleCreateNew = async () => {
+    if (!firestore) return;
+
+    const market = markets.find((item) => item.id === marketId);
+    const paid = parseCurrencyInput(amountPaid);
+    const rawQuantity = measure ? parseCurrencyInput(quantity) : Number.NaN;
+    const productName = newItemName.trim();
+    const normalized = measure ? convertToBaseUnit(rawQuantity, measure) : { quantity: 1, unit: "UN" };
+
+    await salvarNovoOuAtualizar(null, productName, paid, rawQuantity, market, normalized);
+  };
+
+  const salvarNovoOuAtualizar = async (
+    selectedItem: StockItem | null,
+    productName: string,
+    paid: number,
+    rawQuantity: number,
+    market: Market | undefined,
+    normalized: { quantity: number; unit: string }
+  ) => {
+    if (!firestore || !market) return;
 
     try {
       if (selectedItem) {
@@ -141,79 +173,72 @@ export function ItemEntryDialog({ firestore, stockItems, open, onOpenChange }: I
       };
 
       saveEntries([newEntry, ...getEntries()]);
+
+      // Debitar da carteira
+      addTransaction({
+        id: createId(),
+        tipo: "saida",
+        categoria: "Compra de Insumo",
+        descricao: `Compra de ${productName} em ${market.nome}`,
+        valor: paid,
+        bolso: walletPocket,
+        data: new Date().toISOString(),
+      });
+
       toast({
-        title: "Entrada registrada",
-        description: `${productName} recebeu uma nova entrada no estoque.`,
+        title: selectedItem ? "Produto atualizado com sucesso" : "Novo produto adicionado",
+        description: `${productName} foi ${selectedItem ? "atualizado" : "adicionado"} no estoque e o valor debitado da carteira.`,
       });
       resetForm();
       onOpenChange(false);
-    } catch {
+    } catch (error) {
+      console.error("Erro ao registrar entrada e debitar da carteira:", error);
       toast({
         title: "Falha ao registrar",
-        description: "Não foi possível atualizar o estoque com a entrada informada.",
+        description: "Não foi possível atualizar o estoque e debitar da carteira.",
         variant: "destructive",
       });
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogTrigger asChild>
-        <Button size="sm" onClick={() => onOpenChange(true)}>
-          Registrar Entrada de Item
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Registrar Entrada de Item</DialogTitle>
-          <DialogDescription>Cadastre uma compra e atualize o estoque usando o checkout de entrada.</DialogDescription>
-        </DialogHeader>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogTrigger asChild>
+          <Button size="sm" onClick={() => onOpenChange(true)}>
+            Registrar Entrada de Item
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registrar Entrada de Item</DialogTitle>
+            <DialogDescription>Cadastre uma compra e atualize o estoque usando o checkout de entrada.</DialogDescription>
+          </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label>Produto</Label>
-            <Select value={selectedItemId} onValueChange={setSelectedItemId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione um item existente ou crie um novo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__new__">Novo produto</SelectItem>
-                {sortedItems.map((item) => (
-                  <SelectItem key={item.id} value={item.id}>
-                    {item.nome}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="new-stock-name">Nome do Produto</Label>
+              <Input
+                id="new-stock-name"
+                value={newItemName}
+                onChange={(event) => setNewItemName(event.target.value)}
+                placeholder="Ex: Leite Condensado, Frango, etc."
+              />
+            </div>
 
-          {!selectedItem && (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="new-stock-name">Nome do produto novo</Label>
-                <Input
-                  id="new-stock-name"
-                  value={newItemName}
-                  onChange={(event) => setNewItemName(event.target.value)}
-                  placeholder="Ex: Frango"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Categoria</Label>
-                <Select value={category} onValueChange={(value) => setCategory(value as StockItem["categoria"])}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Ingrediente">Ingrediente</SelectItem>
-                    <SelectItem value="Material">Material</SelectItem>
-                    <SelectItem value="Consumo">Consumo</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </>
-          )}
+            <div className="space-y-2">
+              <Label>Categoria</Label>
+              <Select value={category} onValueChange={(value) => setCategory(value as StockItem["categoria"])}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Ingrediente">Ingrediente</SelectItem>
+                  <SelectItem value="Material">Material</SelectItem>
+                  <SelectItem value="Consumo">Consumo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
           <div className="space-y-2">
             <Label>Mercado/Fornecedor</Label>
@@ -262,21 +287,29 @@ export function ItemEntryDialog({ firestore, stockItems, open, onOpenChange }: I
                 ))}
               </SelectContent>
             </Select>
-            {!measure && selectedItem && (
-              <p className="text-xs text-muted-foreground">
-                Sem medida informada, a entrada reutiliza a unidade atual do item: {selectedItem.unidade}.
-              </p>
-            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label>Debitar de</Label>
+            <Select value={walletPocket} onValueChange={(value: WalletPocket) => setWalletPocket(value)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione o bolso" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="caixa">Caixa</SelectItem>
+                <SelectItem value="banco">Banco</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {measure && (
             <div className="space-y-2">
-              <Label htmlFor="entry-quantity">Quantidade</Label>
+              <Label htmlFor="entry-quantity">Quantidade / Peso</Label>
               <Input
                 id="entry-quantity"
                 value={quantity}
                 onChange={(event) => setQuantity(event.target.value)}
-                placeholder="Ex: 2,5"
+                placeholder="Ex: 2.5"
               />
             </div>
           )}
@@ -287,5 +320,14 @@ export function ItemEntryDialog({ firestore, stockItems, open, onOpenChange }: I
         </form>
       </DialogContent>
     </Dialog>
+
+    <SimilarProductModal
+      open={showSimilarModal}
+      onOpenChange={setShowSimilarModal}
+      similarProducts={similarProducts}
+      onSelectProduct={handleSelectSimilar}
+      onCreateNew={handleCreateNew}
+    />
+    </>
   );
 }

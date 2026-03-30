@@ -27,6 +27,8 @@ type PlatformDraft = {
   nome: string;
   cobraTaxa: boolean;
   taxa: string;
+  isApp?: boolean;
+  comissaoMensal?: string;
 };
 
 type MarketDraft = {
@@ -53,7 +55,7 @@ export function CategoriesManager({ mode }: { mode: CategoryMode }) {
   );
 
   const resetDraft = () => {
-    setPlatformDraft({ nome: "", cobraTaxa: false, taxa: "" });
+    setPlatformDraft({ nome: "", cobraTaxa: false, taxa: "", isApp: false, comissaoMensal: "" });
     setMarketDraft({ nome: "" });
   };
 
@@ -70,6 +72,8 @@ export function CategoriesManager({ mode }: { mode: CategoryMode }) {
         nome: platform.nome,
         cobraTaxa: platform.cobraTaxa,
         taxa: platform.taxa ? String(platform.taxa) : "",
+        isApp: platform.isApp || false,
+        comissaoMensal: platform.comissaoMensal ? String(platform.comissaoMensal) : "",
       });
     } else {
       const market = item as Market;
@@ -101,9 +105,15 @@ export function CategoriesManager({ mode }: { mode: CategoryMode }) {
     if (isPlatform) {
       const nome = platformDraft.nome.trim();
       const taxa = platformDraft.cobraTaxa ? parseCurrencyInput(platformDraft.taxa) : 0;
+      const comissao = platformDraft.isApp ? parseCurrencyInput(platformDraft.comissaoMensal || "0") : 0;
 
       if (!nome) {
         toast({ title: "Nome obrigatório", description: "Informe o nome da plataforma.", variant: "destructive" });
+        return;
+      }
+
+      if (platformDraft.isApp && (Number.isNaN(comissao) || comissao < 0)) {
+        toast({ title: "Comissão inválida", description: "Informe a comissão da plataforma.", variant: "destructive" });
         return;
       }
 
@@ -115,8 +125,10 @@ export function CategoriesManager({ mode }: { mode: CategoryMode }) {
       const nextPlatform: Platform = {
         id: platformDraft.id ?? createId(),
         nome,
-        cobraTaxa: platformDraft.cobraTaxa,
-        taxa: platformDraft.cobraTaxa ? taxa : 0,
+        cobraTaxa: platformDraft.cobraTaxa && !platformDraft.isApp,
+        taxa: platformDraft.cobraTaxa && !platformDraft.isApp ? taxa : 0,
+        isApp: platformDraft.isApp || false,
+        comissaoMensal: platformDraft.isApp ? comissao : undefined,
       };
 
       const nextItems = platformDraft.id
@@ -174,7 +186,7 @@ export function CategoriesManager({ mode }: { mode: CategoryMode }) {
               {isPlatform ? "Nova Plataforma" : "Novo Mercado"}
             </Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>{isPlatform ? "Cadastro de Plataforma" : "Cadastro de Mercado"}</DialogTitle>
             </DialogHeader>
@@ -197,33 +209,68 @@ export function CategoriesManager({ mode }: { mode: CategoryMode }) {
                 <>
                   <div className="flex items-center justify-between rounded-lg border px-4 py-3">
                     <div>
-                      <p className="font-medium">Cobra comissão ou taxa?</p>
-                      <p className="text-sm text-muted-foreground">Ative para descontar a taxa na venda.</p>
+                      <p className="font-medium">É um aplicativo de delivery?</p>
+                      <p className="text-sm text-muted-foreground">iFood, Delivery Much, etc.</p>
                     </div>
                     <Switch
-                      checked={platformDraft.cobraTaxa}
+                      checked={platformDraft.isApp || false}
                       onCheckedChange={(checked) =>
                         setPlatformDraft((current) => ({
                           ...current,
-                          cobraTaxa: checked,
-                          taxa: checked ? current.taxa : "",
+                          isApp: checked,
+                          cobraTaxa: !checked ? current.cobraTaxa : false,
+                          comissaoMensal: checked ? current.comissaoMensal : "",
+                          taxa: checked ? "" : current.taxa,
                         }))
                       }
                     />
                   </div>
 
-                  {platformDraft.cobraTaxa && (
+                  {platformDraft.isApp ? (
                     <div className="space-y-2">
-                      <Label htmlFor="platform-fee">Taxa (%)</Label>
+                      <Label htmlFor="app-commission">Comissão Mensal (%)</Label>
                       <Input
-                        id="platform-fee"
-                        value={platformDraft.taxa}
+                        id="app-commission"
+                        value={platformDraft.comissaoMensal || ""}
                         onChange={(event) =>
-                          setPlatformDraft((current) => ({ ...current, taxa: event.target.value }))
+                          setPlatformDraft((current) => ({ ...current, comissaoMensal: event.target.value }))
                         }
-                        placeholder="Ex: 12,5"
+                        placeholder="Ex: 12"
                       />
                     </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+                        <div>
+                          <p className="font-medium">Cobra taxa por venda?</p>
+                          <p className="text-sm text-muted-foreground">Ative para descontar na venda.</p>
+                        </div>
+                        <Switch
+                          checked={platformDraft.cobraTaxa}
+                          onCheckedChange={(checked) =>
+                            setPlatformDraft((current) => ({
+                              ...current,
+                              cobraTaxa: checked,
+                              taxa: checked ? current.taxa : "",
+                            }))
+                          }
+                        />
+                      </div>
+
+                      {platformDraft.cobraTaxa && (
+                        <div className="space-y-2">
+                          <Label htmlFor="platform-fee">Taxa (%)</Label>
+                          <Input
+                            id="platform-fee"
+                            value={platformDraft.taxa}
+                            onChange={(event) =>
+                              setPlatformDraft((current) => ({ ...current, taxa: event.target.value }))
+                            }
+                            placeholder="Ex: 12,5"
+                          />
+                        </div>
+                      )}
+                    </>
                   )}
                 </>
               )}
@@ -250,7 +297,9 @@ export function CategoriesManager({ mode }: { mode: CategoryMode }) {
                   </div>
                   {isPlatform && (
                     <p className="text-sm text-muted-foreground">
-                      {(item as Platform).cobraTaxa ? `Taxa: ${(item as Platform).taxa}%` : "Sem taxa configurada"}
+                      {(item as Platform).isApp
+                        ? `Comissão: ${(item as Platform).comissaoMensal}%`
+                        : (item as Platform).cobraTaxa ? `Taxa: ${(item as Platform).taxa}%` : "Sem taxa configurada"}
                     </p>
                   )}
                 </div>
