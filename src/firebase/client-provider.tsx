@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, type ReactNode, createContext, useContext, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, type ReactNode, createContext, useContext, useCallback } from 'react';
 import { FirebaseProvider } from '@/firebase/provider';
 import { initializeFirebase } from '@/firebase';
 import type { FirebaseApp } from 'firebase/app';
