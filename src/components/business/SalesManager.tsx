@@ -18,21 +18,34 @@ import {
   saveSales,
 } from "@/lib/business-storage";
 import { useWallet } from "@/firebase/client-provider";
-import type { Platform, SaleRecord, StockItem } from "@/lib/types";
+import type { Platform, SaleRecord, StockItem, FinalProduct } from "@/lib/types";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export function SalesManager() {
   const { toast } = useToast();
   const firestore = useFirestore();
   const { addTransaction, addPendingAppSale } = useWallet();
+  
   const stockQuery = useMemoFirebase(() => (firestore ? collection(firestore, "estoque") : null), [firestore]);
   const { data: stockItems } = useCollection<StockItem>(stockQuery);
 
+  const productsQuery = useMemoFirebase(() => (firestore ? collection(firestore, "produtos_finais") : null), [firestore]);
+  const { data: finalProducts } = useCollection<FinalProduct>(productsQuery);
+
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [sales, setSales] = useState<SaleRecord[]>([]);
+  const [saleType, setSaleType] = useState<"stock" | "final">("stock");
+  
+  // Stock sale
   const [produto, setProduto] = useState("");
   const [plataformaId, setPlataformaId] = useState("");
   const [precoVenda, setPrecoVenda] = useState("");
+
+  // Final product sale
+  const [produtoFinalId, setProdutoFinalId] = useState("");
+  const [plataformaIdFinal, setPlataformaIdFinal] = useState("");
+  const [precoVendaFinal, setPrecoVendaFinal] = useState("");
 
   useEffect(() => {
     setPlatforms(getPlatforms());
@@ -42,6 +55,16 @@ export function SalesManager() {
   const selectedPlatform = useMemo(
     () => platforms.find((platform) => platform.id === plataformaId) ?? null,
     [platforms, plataformaId]
+  );
+
+  const selectedPlatformFinal = useMemo(
+    () => platforms.find((platform) => platform.id === plataformaIdFinal) ?? null,
+    [platforms, plataformaIdFinal]
+  );
+
+  const selectedFinalProduct = useMemo(
+    () => finalProducts?.find((p) => p.id === produtoFinalId) ?? null,
+    [finalProducts, produtoFinalId]
   );
 
   const salePreview = useMemo(() => {
@@ -59,9 +82,29 @@ export function SalesManager() {
     };
   }, [precoVenda, selectedPlatform]);
 
+  const salePreviewFinal = useMemo(() => {
+    const price = parseCurrencyInput(precoVendaFinal);
+
+    if (Number.isNaN(price) || price <= 0) return null;
+
+    const tax = selectedPlatformFinal?.cobraTaxa ? selectedPlatformFinal.taxa : 0;
+    const discount = price * (tax / 100);
+    return {
+      price,
+      tax,
+      discount,
+      net: price - discount,
+    };
+  }, [precoVendaFinal, selectedPlatformFinal]);
+
   const sortedStock = useMemo(
     () => [...(stockItems ?? [])].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })),
     [stockItems]
+  );
+
+  const sortedFinalProducts = useMemo(
+    () => [...(finalProducts ?? [])].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })),
+    [finalProducts]
   );
 
   const sortedSales = useMemo(
@@ -69,7 +112,7 @@ export function SalesManager() {
     [sales]
   );
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmitStock = (event: React.FormEvent) => {
     event.preventDefault();
 
     if (!produto || !selectedPlatform || !salePreview) {
@@ -107,7 +150,7 @@ export function SalesManager() {
         categoria: "Venda de Produto",
         descricao: `Venda - ${produto} - ${selectedPlatform.nome}`,
         valor: salePreview.net,
-        bolso: "caixa", // Assumindo que vendas diretas vão para o caixa
+        bolso: "caixa",
       });
       toast({
         title: "Venda registrada",
@@ -120,6 +163,57 @@ export function SalesManager() {
     setPrecoVenda("");
   };
 
+  const handleSubmitFinal = (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!selectedFinalProduct || !selectedPlatformFinal || !salePreviewFinal) {
+      toast({
+        title: "Campos incompletos",
+        description: "Selecione produto final, plataforma e informe um preço válido.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const newSale: SaleRecord = {
+      id: createId(),
+      data: new Date().toISOString(),
+      produto: selectedFinalProduct.nome,
+      plataforma: selectedPlatformFinal.nome,
+      taxaAplicada: salePreviewFinal.tax,
+      precoVenda: salePreviewFinal.price,
+      valorFinal: salePreviewFinal.net,
+    };
+
+    const nextSales = [newSale, ...sales];
+    setSales(nextSales);
+    saveSales(nextSales);
+
+    if (selectedPlatformFinal.isApp) {
+      addPendingAppSale(selectedPlatformFinal, salePreviewFinal.price);
+      toast({
+        title: "Venda registrada",
+        description: `A venda foi salva e o valor líquido será repassado pela ${selectedPlatformFinal.nome}.`,
+      });
+    } else {
+      addTransaction({
+        tipo: "entrada",
+        categoria: "Venda de Produto",
+        descricao: `Venda - ${selectedFinalProduct.nome} - ${selectedPlatformFinal.nome}`,
+        valor: salePreviewFinal.net,
+        bolso: "caixa",
+      });
+      toast({
+        title: "Venda registrada",
+        description: "A venda foi salva e o valor líquido entrou automaticamente na carteira.",
+      });
+    }
+
+    setProdutoFinalId("");
+    setPlataformaIdFinal("");
+    setPrecoVendaFinal("");
+  };
+
   return (
     <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
       <Card className="shadow-sm">
@@ -128,89 +222,193 @@ export function SalesManager() {
           <CardDescription>Selecione o item, aplique a plataforma e confira o valor líquido antes de confirmar.</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Produto</Label>
-              <Select value={produto} onValueChange={setProduto}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione um produto do estoque" />
-                </SelectTrigger>
-                <SelectContent>
-                  {sortedStock.length ? (
-                    sortedStock.map((item) => (
-                      <SelectItem key={item.id} value={item.nome}>
-                        {item.nome}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="empty-stock" disabled>
-                      Nenhum produto disponível
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
+          <Tabs value={saleType} onValueChange={(v) => setSaleType(v as "stock" | "final")} className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="stock">Do Estoque</TabsTrigger>
+              <TabsTrigger value="final">Produto Final</TabsTrigger>
+            </TabsList>
 
-            <div className="space-y-2">
-              <Label>Plataforma</Label>
-              <Select value={plataformaId} onValueChange={setPlataformaId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione a plataforma" />
-                </SelectTrigger>
-                <SelectContent>
-                  {platforms.length ? (
-                    platforms.map((platform) => (
-                      <SelectItem key={platform.id} value={platform.id}>
-                        {platform.nome}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <SelectItem value="empty-platform" disabled>
-                      Cadastre uma plataforma primeiro
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="sale-price">Preço de Venda (R$)</Label>
-              <Input
-                id="sale-price"
-                value={precoVenda}
-                onChange={(event) => setPrecoVenda(event.target.value)}
-                placeholder="Ex: 50,00"
-              />
-            </div>
-
-            {salePreview && (
-              <div className="rounded-2xl border bg-primary/5 p-4">
-                <p className="text-sm text-muted-foreground">Resumo da venda</p>
-                <div className="mt-3 space-y-2 text-sm">
-                  <div className="flex items-center justify-between">
-                    <span>Preço digitado</span>
-                    <span>{formatCurrencyBRL(salePreview.price)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Taxa da plataforma</span>
-                    <span>{salePreview.tax}%</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Desconto da taxa</span>
-                    <span>{formatCurrencyBRL(salePreview.discount)}</span>
-                  </div>
-                  <div className="flex items-center justify-between border-t pt-2 text-base font-semibold text-primary">
-                    <span>Valor final recebido</span>
-                    <span>{formatCurrencyBRL(salePreview.net)}</span>
-                  </div>
+            {/* Stock Sale */}
+            <TabsContent value="stock" className="space-y-4">
+              <form onSubmit={handleSubmitStock} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Produto</Label>
+                  <Select value={produto} onValueChange={setProduto}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um produto do estoque" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sortedStock.length ? (
+                        sortedStock.map((item) => (
+                          <SelectItem key={item.id} value={item.nome}>
+                            {item.nome}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="empty-stock" disabled>
+                          Nenhum produto disponível
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
                 </div>
-              </div>
-            )}
 
-            <Button type="submit" className="w-full">
-              Registrar Venda
-            </Button>
-          </form>
+                <div className="space-y-2">
+                  <Label>Plataforma</Label>
+                  <Select value={plataformaId} onValueChange={setPlataformaId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a plataforma" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {platforms.length ? (
+                        platforms.map((platform) => (
+                          <SelectItem key={platform.id} value={platform.id}>
+                            {platform.nome}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="empty-platform" disabled>
+                          Cadastre uma plataforma primeiro
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="sale-price">Preço de Venda (R$)</Label>
+                  <Input
+                    id="sale-price"
+                    value={precoVenda}
+                    onChange={(event) => setPrecoVenda(event.target.value)}
+                    placeholder="Ex: 50,00"
+                  />
+                </div>
+
+                {salePreview && (
+                  <div className="rounded-2xl border bg-primary/5 p-4">
+                    <p className="text-sm text-muted-foreground">Resumo da venda</p>
+                    <div className="mt-3 space-y-2 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span>Preço digitado</span>
+                        <span>{formatCurrencyBRL(salePreview.price)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Taxa da plataforma</span>
+                        <span>{salePreview.tax}%</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Desconto da taxa</span>
+                        <span>{formatCurrencyBRL(salePreview.discount)}</span>
+                      </div>
+                      <div className="flex items-center justify-between border-t pt-2 text-base font-semibold text-primary">
+                        <span>Valor final recebido</span>
+                        <span>{formatCurrencyBRL(salePreview.net)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <Button type="submit" className="w-full">
+                  Registrar Venda
+                </Button>
+              </form>
+            </TabsContent>
+
+            {/* Final Product Sale */}
+            <TabsContent value="final" className="space-y-4">
+              <form onSubmit={handleSubmitFinal} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Produto Final</Label>
+                  <Select value={produtoFinalId} onValueChange={setProdutoFinalId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um produto final" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sortedFinalProducts.length ? (
+                        sortedFinalProducts.map((product) => (
+                          <SelectItem key={product.id} value={product.id}>
+                            {product.nome} - {formatCurrencyBRL(product.precoSugerido || 0)}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="empty-final" disabled>
+                          Nenhum produto final disponível
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {selectedFinalProduct && (
+                  <div className="rounded-lg bg-muted p-3 text-sm space-y-1">
+                    <p><strong>Custo:</strong> {formatCurrencyBRL(selectedFinalProduct.custoTotal)}</p>
+                    <p><strong>Preço Sugerido:</strong> {formatCurrencyBRL(selectedFinalProduct.precoSugerido || 0)}</p>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <Label>Plataforma</Label>
+                  <Select value={plataformaIdFinal} onValueChange={setPlataformaIdFinal}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione a plataforma" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {platforms.length ? (
+                        platforms.map((platform) => (
+                          <SelectItem key={platform.id} value={platform.id}>
+                            {platform.nome}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <SelectItem value="empty-platform" disabled>
+                          Cadastre uma plataforma primeiro
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="sale-price-final">Preço de Venda (R$)</Label>
+                  <Input
+                    id="sale-price-final"
+                    value={precoVendaFinal}
+                    onChange={(event) => setPrecoVendaFinal(event.target.value)}
+                    placeholder="Ex: 50,00"
+                  />
+                </div>
+
+                {salePreviewFinal && (
+                  <div className="rounded-2xl border bg-primary/5 p-4">
+                    <p className="text-sm text-muted-foreground">Resumo da venda</p>
+                    <div className="mt-3 space-y-2 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span>Preço digitado</span>
+                        <span>{formatCurrencyBRL(salePreviewFinal.price)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Taxa da plataforma</span>
+                        <span>{salePreviewFinal.tax}%</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Desconto da taxa</span>
+                        <span>{formatCurrencyBRL(salePreviewFinal.discount)}</span>
+                      </div>
+                      <div className="flex items-center justify-between border-t pt-2 text-base font-semibold text-primary">
+                        <span>Valor final recebido</span>
+                        <span>{formatCurrencyBRL(salePreviewFinal.net)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <Button type="submit" className="w-full">
+                  Registrar Venda
+                </Button>
+              </form>
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
 
