@@ -1,3 +1,4 @@
+
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -25,6 +26,11 @@ service cloud.firestore {
       allow get, list: if true;
       allow create: if true;
       allow update, delete: if resource != null;
+    }
+
+    // Allow public read/write for app configuration documents (wallet, pending sales, card info)
+    match /appConfig/{documentId} {
+      allow read, write: if true;
     }
   }
 }

@@ -65,12 +65,16 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
       } else {
         // Initialize wallet if it doesn't exist
         const initialWallet = { banco: 0, caixa: 0, transacoes: [] };
-        setDoc(walletDocRef, initialWallet);
+        setDoc(walletDocRef, initialWallet).catch((error) => {
+          console.error("Error initializing wallet:", error);
+        });
         setWalletData(initialWallet);
       }
       setIsLoadingWallet(false);
     }, (error) => {
       console.error("Error fetching wallet data:", error);
+      // Set default wallet data on error to allow app to continue
+      setWalletData({ banco: 0, caixa: 0, transacoes: [] });
       setIsLoadingWallet(false);
     });
 
@@ -85,11 +89,15 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
       if (docSnap.exists()) {
         setVendasPendentesApps(docSnap.data() as VendasPendentesApps);
       } else {
-        setDoc(pendingSalesDocRef, {}); // Initialize if it doesn't exist
+        setDoc(pendingSalesDocRef, {}).catch((error) => {
+          console.error("Error initializing pending sales:", error);
+        });
         setVendasPendentesApps({});
       }
     }, (error) => {
       console.error("Error fetching pending app sales data:", error);
+      // Set default empty object on error to allow app to continue
+      setVendasPendentesApps({});
     });
 
     return () => unsubscribe();
@@ -104,12 +112,16 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
         setCardInfo(docSnap.data() as CardInfo);
       } else {
         const initialCardInfo = { nomeNegocio: "Minha Empresa", responsavel: "", documento: "", telefone: "", observacoes: "" };
-        setDoc(cardInfoDocRef, initialCardInfo);
+        setDoc(cardInfoDocRef, initialCardInfo).catch((error) => {
+          console.error("Error initializing card info:", error);
+        });
         setCardInfo(initialCardInfo);
       }
       setIsLoadingCardInfo(false);
     }, (error) => {
       console.error("Error fetching card info data:", error);
+      // Set default card info on error to allow app to continue
+      setCardInfo({ nomeNegocio: "Minha Empresa", responsavel: "", documento: "", telefone: "", observacoes: "" });
       setIsLoadingCardInfo(false);
     });
 
