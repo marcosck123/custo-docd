@@ -1,7 +1,6 @@
-"use client";
 
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { CreditCard, Landmark, Wallet, ArrowDownCircle, ArrowUpCircle, RefreshCcw, FlipHorizontal } from "lucide-react";
+import { CreditCard, Landmark, Wallet, ArrowDownCircle, ArrowUpCircle, RefreshCcw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -61,15 +60,6 @@ export function WalletPopup({
   const [isConfirmingRepasse, setIsConfirmingRepasse] = useState(false);
   const [platformToRepasse, setPlatformToRepasse] = useState<Platform | null>(null);
   const [repassePocket, setRepassePocket] = useState<WalletPocket>("banco");
-  const [isFlipped, setIsFlipped] = useState(false);
-  const { cardInfo, updateCardInfo, isLoadingCardInfo } = useWallet();
-  const [cardInfoDraft, setCardInfoDraft] = useState<CardInfo | null>(null);
-
-  useEffect(() => {
-    if (cardInfo) {
-      setCardInfoDraft(cardInfo);
-    }
-  }, [cardInfo]);
 
   const total = useMemo(() => (walletData ? walletData.banco + walletData.caixa : 0), [walletData]);
   const categories = flowType === "entrada" ? entradaCategorias : saidaCategorias;
@@ -104,7 +94,7 @@ export function WalletPopup({
     if (flowType === "saida" && walletData[draft.bolso] < valor) {
       toast({
         title: "Saldo insuficiente",
-        description: `O bolso ${draft.bolso} não possui saldo suficiente.`, // Simplified for now
+        description: `O bolso ${draft.bolso} não possui saldo suficiente.`,
         variant: "destructive",
       });
       return;
@@ -132,17 +122,6 @@ export function WalletPopup({
       description: "A carteira foi atualizada com sucesso.",
     });
   }, [flowType, walletData, draft, addTransaction, toast]);
-
-  const handleCardInfoSubmit = useCallback(async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!cardInfoDraft) return;
-
-    await updateCardInfo(cardInfoDraft);
-    toast({
-      title: "Informações do Negócio Salvas!",
-      description: "Os dados do seu negócio foram atualizados com sucesso.",
-    });
-  }, [cardInfoDraft, updateCardInfo, toast]);
 
   const handleReceiveRepasse = useCallback(async () => {
     if (!platformToRepasse || !vendasPendentesApps || !vendasPendentesApps[platformToRepasse.id]) return;
@@ -184,10 +163,10 @@ export function WalletPopup({
 
             <div className="grid gap-8 lg:grid-cols-[1.3fr_0.7fr]">
               <div>
-                <div className={`wallet-card-container min-h-[420px] md:min-h-[520px] [perspective:1000px]`}>
-                  <div className={`wallet-card relative w-full h-full rounded-[2rem] border border-white/15 text-white shadow-[0_30px_80px_rgba(0,0,0,0.35)] [transform-style:preserve-3d] transition-transform duration-700 ${isFlipped ? '[transform:rotateY(180deg)]' : ''}`}>
-                    {/* Frente do Cartão */}
-                    <div className="absolute w-full h-full p-8 md:p-10 [backface-visibility:hidden]">
+                <div className="wallet-card-container min-h-[420px] md:min-h-[520px]">
+                  <div className="wallet-card relative w-full h-full rounded-[2rem] border border-primary/20 text-white shadow-[0_30px_80px_rgba(0,0,0,0.35)] bg-gradient-to-br from-primary/30 via-primary/20 to-primary/10">
+                    {/* Cartão Frontal */}
+                    <div className="w-full h-full p-8 md:p-10">
                       <div className="wallet-card__shine" />
                       <div className="relative z-10 flex h-full flex-col justify-between">
                         <div className="flex items-start justify-between gap-4">
@@ -228,80 +207,7 @@ export function WalletPopup({
                             <ArrowUpCircle className="mr-2 h-4 w-4" />
                             Registrar Saída
                           </Button>
-                          <Button
-                            type="button"
-                            size="lg"
-                            variant="ghost"
-                            className="text-white/70 hover:bg-white/10 hover:text-white"
-                            onClick={(e) => { e.stopPropagation(); setIsFlipped(!isFlipped); }}
-                          >
-                            <FlipHorizontal className="mr-2 h-4 w-4" />
-                            Virar Cartão
-                          </Button>
                         </div>
-                      </div>
-                    </div>
-
-                    {/* Verso do Cartão */}
-                    <div className="absolute w-full h-full p-8 md:p-10 [backface-visibility:hidden] [transform:rotateY(180deg)]">
-                      <div className="relative z-10 flex h-full flex-col justify-between">
-                        <div>
-                          <h3 className="text-2xl font-semibold">Informações do Negócio</h3>
-                          <p className="text-white/70 text-sm">Edite as informações do seu negócio.</p>
-                        </div>
-                        {cardInfo && (
-                          <form onSubmit={handleCardInfoSubmit} className="space-y-3 text-sm">
-                            <div>
-                              <Label htmlFor="nomeNegocio" className="text-white/70">Nome do Negócio</Label>
-                              <Input
-                                id="nomeNegocio"
-                                value={cardInfoDraft.nomeNegocio}
-                                onChange={(e) => setCardInfoDraft(prev => ({ ...prev, nomeNegocio: e.target.value }))}
-                                className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="responsavel" className="text-white/70">Responsável</Label>
-                              <Input
-                                id="responsavel"
-                                value={cardInfoDraft.responsavel}
-                                onChange={(e) => setCardInfoDraft(prev => ({ ...prev, responsavel: e.target.value }))}
-                                className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="documento" className="text-white/70">Documento (CPF/CNPJ)</Label>
-                              <Input
-                                id="documento"
-                                value={cardInfoDraft.documento}
-                                onChange={(e) => setCardInfoDraft(prev => ({ ...prev, documento: e.target.value }))}
-                                className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="telefone" className="text-white/70">Telefone</Label>
-                              <Input
-                                id="telefone"
-                                value={cardInfoDraft.telefone}
-                                onChange={(e) => setCardInfoDraft(prev => ({ ...prev, telefone: e.target.value }))}
-                                className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                              />
-                            </div>
-                            <div>
-                              <Label htmlFor="observacoes" className="text-white/70">Observações</Label>
-                              <Textarea
-                                id="observacoes"
-                                value={cardInfoDraft.observacoes}
-                                onChange={(e) => setCardInfoDraft(prev => ({ ...prev, observacoes: e.target.value }))}
-                                className="bg-white/10 border-white/20 text-white placeholder:text-white/50"
-                              />
-                            </div>
-                            <Button type="submit" className="w-full bg-white/20 hover:bg-white/30 text-white">
-                              Salvar Informações
-                            </Button>
-                          </form>
-                        )}
-                        {!cardInfo && <p className="text-white/70">Carregando informações do cartão...</p>}
                       </div>
                     </div>
                   </div>
@@ -328,7 +234,7 @@ export function WalletPopup({
                         <div key={platformId} className="rounded-xl border p-3">
                           <div className="flex items-start justify-between gap-3">
                             <div>
-                              <p className="font-medium">{platformId}</p> {/* TODO: Get platform name from ID */}
+                              <p className="font-medium">{platformId}</p>
                               <p className="text-xs text-muted-foreground">Total Bruto: {formatCurrency(pending.totalBruto)}</p>
                               <p className="text-xs text-muted-foreground">Comissão: {pending.comissao}%</p>
                             </div>
@@ -339,7 +245,7 @@ export function WalletPopup({
                                 size="sm"
                                 className="mt-1"
                                 onClick={() => {
-                                  setPlatformToRepasse({ id: platformId, nome: platformId, cobraTaxa: false, taxa: 0, isApp: true, comissaoMensal: pending.comissao }); // Temporary platform object
+                                  setPlatformToRepasse({ id: platformId, nome: platformId, cobraTaxa: false, taxa: 0, isApp: true, comissaoMensal: pending.comissao });
                                   setIsConfirmingRepasse(true);
                                 }}
                               >

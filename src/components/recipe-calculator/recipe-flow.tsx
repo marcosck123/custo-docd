@@ -1,56 +1,43 @@
 "use client";
 
 import React from "react";
-
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-import { FinalProductManager } from "./final-product-manager";
 import { RecipeManager } from "./recipe-manager";
-import { SavedProductsManager } from "./saved-products-manager";
+import { Cake, Droplet } from "lucide-react";
 
 export function RecipeFlow() {
   return (
-    <Tabs defaultValue="creator" className="w-full">
-      <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="creator">Nova Receita</TabsTrigger>
-        <TabsTrigger value="saved">Produtos Salvos</TabsTrigger>
-      </TabsList>
+    <div className="w-full space-y-6">
+      <Tabs defaultValue="dough" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 bg-gradient-to-r from-primary/10 to-primary/5 p-1">
+          <TabsTrigger value="dough" className="flex items-center gap-2">
+            <Cake className="h-4 w-4" />
+            Massa
+          </TabsTrigger>
+          <TabsTrigger value="filling" className="flex items-center gap-2">
+            <Droplet className="h-4 w-4" />
+            Recheio
+          </TabsTrigger>
+        </TabsList>
 
-      <TabsContent value="creator">
-        <Tabs defaultValue="dough" className="mt-4 w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="dough">1. Massa</TabsTrigger>
-            <TabsTrigger value="filling">2. Recheio</TabsTrigger>
-            <TabsTrigger value="product">3. Produto Final</TabsTrigger>
-          </TabsList>
+        <TabsContent value="dough" className="mt-6">
+          <RecipeManager
+            recipeType="dough"
+            title="Receitas de Massa"
+            description="Crie e gerencie suas receitas de massa. Adicione ingredientes, defina o rendimento e acompanhe os custos."
+            collectionName="receitas_massa"
+          />
+        </TabsContent>
 
-          <TabsContent value="dough" className="mt-4">
-            <RecipeManager
-              recipeType="dough"
-              title="Massa"
-              description="Crie e gerencie suas receitas de massa."
-              collectionName="receitas_massa"
-            />
-          </TabsContent>
-
-          <TabsContent value="filling" className="mt-4">
-            <RecipeManager
-              recipeType="filling"
-              title="Recheio"
-              description="Crie e gerencie suas receitas de recheio."
-              collectionName="receitas_recheio"
-            />
-          </TabsContent>
-
-          <TabsContent value="product" className="mt-4">
-            <FinalProductManager />
-          </TabsContent>
-        </Tabs>
-      </TabsContent>
-
-      <TabsContent value="saved" className="mt-4">
-        <SavedProductsManager />
-      </TabsContent>
-    </Tabs>
+        <TabsContent value="filling" className="mt-6">
+          <RecipeManager
+            recipeType="filling"
+            title="Receitas de Recheio"
+            description="Crie e gerencie suas receitas de recheio. Combine ingredientes e calcule o custo por unidade."
+            collectionName="receitas_recheio"
+          />
+        </TabsContent>
+      </Tabs>
+    </div>
   );
 }
