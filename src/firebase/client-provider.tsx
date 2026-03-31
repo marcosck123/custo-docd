@@ -63,8 +63,8 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
       if (docSnap.exists()) {
         setWalletData(docSnap.data() as WalletData);
       } else {
-        // Initialize wallet if it doesn't exist
-        const initialWallet = { banco: 0, caixa: 0, transacoes: [] };
+        // Initialize wallet if it doesn't exist using setDoc (creates if not exists)
+        const initialWallet: WalletData = { banco: 0, caixa: 0, transacoes: [] };
         setDoc(walletDocRef, initialWallet).catch((error) => {
           console.error("Error initializing wallet:", error);
         });
@@ -111,7 +111,7 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
       if (docSnap.exists()) {
         setCardInfo(docSnap.data() as CardInfo);
       } else {
-        const initialCardInfo = { nomeNegocio: "Minha Empresa", responsavel: "", documento: "", telefone: "", observacoes: "" };
+        const initialCardInfo: CardInfo = { nomeNegocio: "Minha Empresa", responsavel: "", documento: "", telefone: "", observacoes: "" };
         setDoc(cardInfoDocRef, initialCardInfo).catch((error) => {
           console.error("Error initializing card info:", error);
         });
@@ -148,11 +148,12 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
     }
 
     try {
-      await updateDoc(walletDocRef, {
+      // Use setDoc with merge to ensure document exists
+      await setDoc(walletDocRef, {
         banco: newBanco,
         caixa: newCaixa,
         transacoes: updatedTransactions,
-      });
+      }, { merge: false });
     } catch (error) {
       console.error("Error adding transaction:", error);
       throw error;
@@ -189,11 +190,12 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
     }
 
     try {
-      await updateDoc(walletDocRef, {
+      // Use setDoc with merge to ensure document exists
+      await setDoc(walletDocRef, {
         banco: newBanco,
         caixa: newCaixa,
         transacoes: updatedTransactions,
-      });
+      }, { merge: false });
     } catch (error) {
       console.error("Error updating transaction:", error);
       throw error;
@@ -218,11 +220,12 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
     }
 
     try {
-      await updateDoc(walletDocRef, {
+      // Use setDoc with merge to ensure document exists
+      await setDoc(walletDocRef, {
         banco: newBanco,
         caixa: newCaixa,
         transacoes: updatedTransactions,
-      });
+      }, { merge: false });
     } catch (error) {
       console.error("Error deleting transaction:", error);
       throw error;
@@ -233,9 +236,10 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
     if (!walletDocRef || !walletData) return;
 
     try {
-      await updateDoc(walletDocRef, {
+      // Use setDoc with merge to preserve other fields
+      await setDoc(walletDocRef, {
         [pocket]: walletData[pocket] + amount,
-      });
+      }, { merge: true });
     } catch (error) {
       console.error("Error updating wallet balance:", error);
       throw error;
@@ -267,9 +271,10 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
     };
 
     try {
-      await updateDoc(pendingSalesDocRef, {
+      // Use setDoc with merge to preserve other platforms
+      await setDoc(pendingSalesDocRef, {
         [platformId]: updatedPending,
-      });
+      }, { merge: true });
     } catch (error) {
       console.error("Error adding pending app sale:", error);
       throw error;
@@ -279,7 +284,8 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
   const updateCardInfo = useCallback(async (info: Partial<CardInfo>) => {
     if (!cardInfoDocRef) return;
     try {
-      await updateDoc(cardInfoDocRef, info);
+      // Use setDoc with merge to preserve other fields
+      await setDoc(cardInfoDocRef, info, { merge: true });
     } catch (error) {
       console.error("Error updating card info:", error);
       throw error;
@@ -293,6 +299,7 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
     delete updatedVendasPendentes[platformId];
 
     try {
+      // Use setDoc to replace entire document
       await setDoc(pendingSalesDocRef, updatedVendasPendentes);
     } catch (error) {
       console.error("Error clearing pending app sales:", error);
