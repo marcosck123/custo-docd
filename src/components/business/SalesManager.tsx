@@ -1,7 +1,7 @@
-"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import { collection } from "firebase/firestore";
+import { Edit, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,6 +21,8 @@ import { useWallet } from "@/firebase/client-provider";
 import type { Platform, SaleRecord, StockItem, FinalProduct } from "@/lib/types";
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 export function SalesManager() {
   const { toast } = useToast();
@@ -36,6 +38,8 @@ export function SalesManager() {
   const [platforms, setPlatforms] = useState<Platform[]>([]);
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [saleType, setSaleType] = useState<"stock" | "final">("stock");
+  const [editingSale, setEditingSale] = useState<SaleRecord | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   
   // Stock sale
   const [produto, setProduto] = useState("");
@@ -212,6 +216,39 @@ export function SalesManager() {
     setProdutoFinalId("");
     setPlataformaIdFinal("");
     setPrecoVendaFinal("");
+  };
+
+  const handleEditSale = (sale: SaleRecord) => {
+    setEditingSale(sale);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleSaveEditedSale = () => {
+    if (!editingSale) return;
+
+    const updatedSales = sales.map(s => s.id === editingSale.id ? editingSale : s);
+    setSales(updatedSales);
+    saveSales(updatedSales);
+
+    toast({
+      title: "Venda atualizada",
+      description: "A venda foi atualizada com sucesso.",
+    });
+
+    setIsEditDialogOpen(false);
+    setEditingSale(null);
+  };
+
+  const handleDeleteSale = (saleId: string) => {
+    const updatedSales = sales.filter(s => s.id !== saleId);
+    setSales(updatedSales);
+    saveSales(updatedSales);
+
+    toast({
+      title: "Venda deletada",
+      description: "A venda foi removida do histórico.",
+      variant: "destructive",
+    });
   };
 
   return (
@@ -422,11 +459,46 @@ export function SalesManager() {
             sortedSales.slice(0, 8).map((sale) => (
               <div key={sale.id} className="rounded-2xl border p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div>
+                  <div className="flex-1">
                     <p className="font-medium">{sale.produto}</p>
                     <p className="text-sm text-muted-foreground">{sale.plataforma}</p>
                   </div>
-                  <p className="font-semibold text-primary">{formatCurrencyBRL(sale.valorFinal)}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-primary text-right">{formatCurrencyBRL(sale.valorFinal)}</p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => handleEditSale(sale)}
+                    >
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Deletar Venda</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Tem certeza que deseja deletar esta venda? Esta ação não pode ser desfeita.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDeleteSale(sale.id)}>
+                            Deletar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 </div>
                 <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
                   <span>Venda: {formatCurrencyBRL(sale.precoVenda)}</span>
@@ -441,6 +513,65 @@ export function SalesManager() {
           )}
         </CardContent>
       </Card>
+
+      {/* Dialog de Edição de Venda */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Venda</DialogTitle>
+            <DialogDescription>Atualize os detalhes da venda.</DialogDescription>
+          </DialogHeader>
+          {editingSale && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Produto</Label>
+                <Input
+                  value={editingSale.produto}
+                  onChange={(e) => setEditingSale({ ...editingSale, produto: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Plataforma</Label>
+                <Input
+                  value={editingSale.plataforma}
+                  onChange={(e) => setEditingSale({ ...editingSale, plataforma: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Preço de Venda (R$)</Label>
+                <Input
+                  value={editingSale.precoVenda}
+                  onChange={(e) => setEditingSale({ ...editingSale, precoVenda: parseFloat(e.target.value) || 0 })}
+                  type="number"
+                  step="0.01"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Taxa (%)</Label>
+                <Input
+                  value={editingSale.taxaAplicada}
+                  onChange={(e) => setEditingSale({ ...editingSale, taxaAplicada: parseFloat(e.target.value) || 0 })}
+                  type="number"
+                  step="0.01"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Valor Final (R$)</Label>
+                <Input
+                  value={editingSale.valorFinal}
+                  onChange={(e) => setEditingSale({ ...editingSale, valorFinal: parseFloat(e.target.value) || 0 })}
+                  type="number"
+                  step="0.01"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveEditedSale}>Salvar Alterações</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

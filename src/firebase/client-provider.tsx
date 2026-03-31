@@ -1,11 +1,10 @@
-"use client";
 
 import React, { useState, useEffect, useMemo, type ReactNode, createContext, useContext, useCallback } from 'react';
 import { FirebaseProvider } from '@/firebase/provider';
 import { initializeFirebase } from '@/firebase';
 import type { FirebaseApp } from 'firebase/app';
 import type { Auth } from 'firebase/auth';
-import { collection, doc, Firestore, onSnapshot, query, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, Firestore, onSnapshot, query, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import type { WalletData, WalletTransaction, VendasPendentesApps, Platform, CardInfo } from '@/lib/types';
 import { createId } from '@/lib/business-storage';
 
@@ -19,11 +18,13 @@ interface WalletContextType {
   walletData: WalletData | null;
   vendasPendentesApps: VendasPendentesApps | null;
   cardInfo: CardInfo | null;
-  addTransaction: (transaction: Omit<WalletTransaction, 'id'>) => void;
-  updateWalletBalance: (pocket: keyof WalletData, amount: number) => void;
-  addPendingAppSale: (platform: Platform, saleValue: number) => void;
-  clearPendingAppSales: (platformId: string) => void;
-  updateCardInfo: (info: Partial<CardInfo>) => void;
+  addTransaction: (transaction: Omit<WalletTransaction, 'id' | 'data'>) => Promise<void>;
+  updateTransaction: (transactionId: string, updates: Partial<WalletTransaction>) => Promise<void>;
+  deleteTransaction: (transactionId: string) => Promise<void>;
+  updateWalletBalance: (pocket: keyof WalletData, amount: number) => Promise<void>;
+  addPendingAppSale: (platform: Platform, saleValue: number) => Promise<void>;
+  clearPendingAppSales: (platformId: string) => Promise<void>;
+  updateCardInfo: (info: Partial<CardInfo>) => Promise<void>;
   isLoadingWallet: boolean;
   isLoadingCardInfo: boolean;
 }
@@ -63,8 +64,9 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
         setWalletData(docSnap.data() as WalletData);
       } else {
         // Initialize wallet if it doesn't exist
-        setDoc(walletDocRef, { banco: 0, caixa: 0, transacoes: [] });
-        setWalletData({ banco: 0, caixa: 0, transacoes: [] });
+        const initialWallet = { banco: 0, caixa: 0, transacoes: [] };
+        setDoc(walletDocRef, initialWallet);
+        setWalletData(initialWallet);
       }
       setIsLoadingWallet(false);
     }, (error) => {
@@ -101,8 +103,9 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
       if (docSnap.exists()) {
         setCardInfo(docSnap.data() as CardInfo);
       } else {
-        setDoc(cardInfoDocRef, { nomeNegocio: "Minha Empresa", responsavel: "", documento: "", telefone: "", observacoes: "" });
-        setCardInfo({ nomeNegocio: "Minha Empresa", responsavel: "", documento: "", telefone: "", observacoes: "" });
+        const initialCardInfo = { nomeNegocio: "Minha Empresa", responsavel: "", documento: "", telefone: "", observacoes: "" };
+        setDoc(cardInfoDocRef, initialCardInfo);
+        setCardInfo(initialCardInfo);
       }
       setIsLoadingCardInfo(false);
     }, (error) => {
@@ -113,10 +116,15 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
     return () => unsubscribe();
   }, [cardInfoDocRef]);
 
-  const addTransaction = useCallback(async (transaction: Omit<WalletTransaction, 'id'>) => {
+  const addTransaction = useCallback(async (transaction: Omit<WalletTransaction, 'id' | 'data'>) => {
     if (!walletDocRef || !walletData) return;
 
-    const newTransaction: WalletTransaction = { ...transaction, id: createId() };
+    const newTransaction: WalletTransaction = { 
+      ...transaction, 
+      id: createId(),
+      data: new Date().toISOString()
+    };
+    
     const updatedTransactions = [...walletData.transacoes, newTransaction];
     let newBanco = walletData.banco;
     let newCaixa = walletData.caixa;
@@ -127,19 +135,99 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
       newCaixa += (newTransaction.tipo === 'entrada' ? newTransaction.valor : -newTransaction.valor);
     }
 
-    await updateDoc(walletDocRef, {
-      banco: newBanco,
-      caixa: newCaixa,
-      transacoes: updatedTransactions,
-    });
+    try {
+      await updateDoc(walletDocRef, {
+        banco: newBanco,
+        caixa: newCaixa,
+        transacoes: updatedTransactions,
+      });
+    } catch (error) {
+      console.error("Error adding transaction:", error);
+      throw error;
+    }
+  }, [walletDocRef, walletData]);
+
+  const updateTransaction = useCallback(async (transactionId: string, updates: Partial<WalletTransaction>) => {
+    if (!walletDocRef || !walletData) return;
+
+    const transactionIndex = walletData.transacoes.findIndex(t => t.id === transactionId);
+    if (transactionIndex === -1) return;
+
+    const oldTransaction = walletData.transacoes[transactionIndex];
+    const updatedTransaction = { ...oldTransaction, ...updates };
+    const updatedTransactions = [...walletData.transacoes];
+    updatedTransactions[transactionIndex] = updatedTransaction;
+
+    // Recalculate balances
+    let newBanco = walletData.banco;
+    let newCaixa = walletData.caixa;
+
+    // Remove old transaction effect
+    if (oldTransaction.bolso === 'banco') {
+      newBanco -= (oldTransaction.tipo === 'entrada' ? oldTransaction.valor : -oldTransaction.valor);
+    } else {
+      newCaixa -= (oldTransaction.tipo === 'entrada' ? oldTransaction.valor : -oldTransaction.valor);
+    }
+
+    // Add new transaction effect
+    if (updatedTransaction.bolso === 'banco') {
+      newBanco += (updatedTransaction.tipo === 'entrada' ? updatedTransaction.valor : -updatedTransaction.valor);
+    } else {
+      newCaixa += (updatedTransaction.tipo === 'entrada' ? updatedTransaction.valor : -updatedTransaction.valor);
+    }
+
+    try {
+      await updateDoc(walletDocRef, {
+        banco: newBanco,
+        caixa: newCaixa,
+        transacoes: updatedTransactions,
+      });
+    } catch (error) {
+      console.error("Error updating transaction:", error);
+      throw error;
+    }
+  }, [walletDocRef, walletData]);
+
+  const deleteTransaction = useCallback(async (transactionId: string) => {
+    if (!walletDocRef || !walletData) return;
+
+    const transaction = walletData.transacoes.find(t => t.id === transactionId);
+    if (!transaction) return;
+
+    const updatedTransactions = walletData.transacoes.filter(t => t.id !== transactionId);
+    let newBanco = walletData.banco;
+    let newCaixa = walletData.caixa;
+
+    // Remove transaction effect
+    if (transaction.bolso === 'banco') {
+      newBanco -= (transaction.tipo === 'entrada' ? transaction.valor : -transaction.valor);
+    } else {
+      newCaixa -= (transaction.tipo === 'entrada' ? transaction.valor : -transaction.valor);
+    }
+
+    try {
+      await updateDoc(walletDocRef, {
+        banco: newBanco,
+        caixa: newCaixa,
+        transacoes: updatedTransactions,
+      });
+    } catch (error) {
+      console.error("Error deleting transaction:", error);
+      throw error;
+    }
   }, [walletDocRef, walletData]);
 
   const updateWalletBalance = useCallback(async (pocket: keyof WalletData, amount: number) => {
     if (!walletDocRef || !walletData) return;
 
-    await updateDoc(walletDocRef, {
-      [pocket]: walletData[pocket] + amount,
-    });
+    try {
+      await updateDoc(walletDocRef, {
+        [pocket]: walletData[pocket] + amount,
+      });
+    } catch (error) {
+      console.error("Error updating wallet balance:", error);
+      throw error;
+    }
   }, [walletDocRef, walletData]);
 
   const addPendingAppSale = useCallback(async (platform: Platform, saleValue: number) => {
@@ -163,17 +251,27 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
       totalBruto: currentPending.totalBruto + saleValue,
       totalComissao: currentPending.totalComissao + comissaoValor,
       totalLiquido: currentPending.totalLiquido + liquido,
-      vendasIds: [...currentPending.vendasIds, createId()], // Assuming each sale has a unique ID
+      vendasIds: [...currentPending.vendasIds, createId()],
     };
 
-    await updateDoc(pendingSalesDocRef, {
-      [platformId]: updatedPending,
-    });
+    try {
+      await updateDoc(pendingSalesDocRef, {
+        [platformId]: updatedPending,
+      });
+    } catch (error) {
+      console.error("Error adding pending app sale:", error);
+      throw error;
+    }
   }, [pendingSalesDocRef, vendasPendentesApps]);
 
   const updateCardInfo = useCallback(async (info: Partial<CardInfo>) => {
     if (!cardInfoDocRef) return;
-    await updateDoc(cardInfoDocRef, info);
+    try {
+      await updateDoc(cardInfoDocRef, info);
+    } catch (error) {
+      console.error("Error updating card info:", error);
+      throw error;
+    }
   }, [cardInfoDocRef]);
 
   const clearPendingAppSales = useCallback(async (platformId: string) => {
@@ -182,7 +280,12 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
     const updatedVendasPendentes = { ...vendasPendentesApps };
     delete updatedVendasPendentes[platformId];
 
-    await setDoc(pendingSalesDocRef, updatedVendasPendentes);
+    try {
+      await setDoc(pendingSalesDocRef, updatedVendasPendentes);
+    } catch (error) {
+      console.error("Error clearing pending app sales:", error);
+      throw error;
+    }
   }, [pendingSalesDocRef, vendasPendentesApps]);
 
   const contextValue = useMemo(() => ({
@@ -190,13 +293,15 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
     vendasPendentesApps,
     cardInfo,
     addTransaction,
+    updateTransaction,
+    deleteTransaction,
     updateWalletBalance,
     addPendingAppSale,
     clearPendingAppSales,
     updateCardInfo,
     isLoadingWallet,
     isLoadingCardInfo,
-  }), [walletData, vendasPendentesApps, cardInfo, addTransaction, updateWalletBalance, addPendingAppSale, clearPendingAppSales, updateCardInfo, isLoadingWallet, isLoadingCardInfo]);
+  }), [walletData, vendasPendentesApps, cardInfo, addTransaction, updateTransaction, deleteTransaction, updateWalletBalance, addPendingAppSale, clearPendingAppSales, updateCardInfo, isLoadingWallet, isLoadingCardInfo]);
 
   return (
     <WalletContext.Provider value={contextValue}>
@@ -204,6 +309,10 @@ const WalletProvider = ({ children, firestore }: WalletProviderProps) => {
     </WalletContext.Provider>
   );
 };
+
+interface FirebaseClientProviderProps {
+  children: ReactNode;
+}
 
 export function FirebaseClientProvider({ children }: FirebaseClientProviderProps) {
   const [firebaseServices, setFirebaseServices] = useState<FirebaseServices>({

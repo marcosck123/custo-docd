@@ -1,6 +1,6 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react";
-import { CreditCard, Landmark, Wallet, ArrowDownCircle, ArrowUpCircle, RefreshCcw } from "lucide-react";
+import { CreditCard, Landmark, Wallet, ArrowDownCircle, ArrowUpCircle, RefreshCcw, Edit, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -12,8 +12,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useToast } from "@/hooks/use-toast";
 import { parseCurrencyInput } from "@/lib/business-storage";
 import { formatCurrency } from "@/lib/formatters";
-import type { Platform, WalletData, WalletPocket } from "@/lib/types";
+import type { Platform, WalletData, WalletPocket, WalletTransaction } from "@/lib/types";
 import { useWallet } from "@/firebase/client-provider";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
 type FlowType = "entrada" | "saida" | null;
 
@@ -48,7 +49,7 @@ export function WalletPopup({
   onOpenChange: (open: boolean) => void;
 }) {
   const { toast } = useToast();
-  const { walletData, vendasPendentesApps, addTransaction, updateWalletBalance, clearPendingAppSales, isLoadingWallet } = useWallet();
+  const { walletData, vendasPendentesApps, addTransaction, updateTransaction, deleteTransaction, clearPendingAppSales, isLoadingWallet } = useWallet();
   const [flowType, setFlowType] = useState<FlowType>(null);
   const [draft, setDraft] = useState<TransactionDraft>({
     categoria: "",
@@ -60,6 +61,8 @@ export function WalletPopup({
   const [isConfirmingRepasse, setIsConfirmingRepasse] = useState(false);
   const [platformToRepasse, setPlatformToRepasse] = useState<Platform | null>(null);
   const [repassePocket, setRepassePocket] = useState<WalletPocket>("banco");
+  const [editingTransaction, setEditingTransaction] = useState<WalletTransaction | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
   const total = useMemo(() => (walletData ? walletData.banco + walletData.caixa : 0), [walletData]);
   const categories = flowType === "entrada" ? entradaCategorias : saidaCategorias;
@@ -100,27 +103,35 @@ export function WalletPopup({
       return;
     }
 
-    await addTransaction({
-      tipo: flowType,
-      categoria: categoriaBase,
-      descricao: draft.descricao.trim() || categoriaBase,
-      valor,
-      bolso: draft.bolso,
-    });
+    try {
+      await addTransaction({
+        tipo: flowType,
+        categoria: categoriaBase,
+        descricao: draft.descricao.trim() || categoriaBase,
+        valor,
+        bolso: draft.bolso,
+      });
 
-    setFlowType(null);
-    setDraft({
-      categoria: "",
-      outro: "",
-      valor: "",
-      bolso: "banco",
-      descricao: "",
-    });
+      setFlowType(null);
+      setDraft({
+        categoria: "",
+        outro: "",
+        valor: "",
+        bolso: "banco",
+        descricao: "",
+      });
 
-    toast({
-      title: flowType === "entrada" ? "Entrada registrada" : "Saída registrada",
-      description: "A carteira foi atualizada com sucesso.",
-    });
+      toast({
+        title: flowType === "entrada" ? "Entrada registrada" : "Saída registrada",
+        description: "A carteira foi atualizada com sucesso.",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao registrar transação",
+        description: "Houve um erro ao salvar a transação. Tente novamente.",
+        variant: "destructive",
+      });
+    }
   }, [flowType, walletData, draft, addTransaction, toast]);
 
   const handleReceiveRepasse = useCallback(async () => {
@@ -128,25 +139,75 @@ export function WalletPopup({
 
     const pending = vendasPendentesApps[platformToRepasse.id];
 
-    await addTransaction({
-      tipo: "entrada",
-      categoria: "Repasse de Aplicativo",
-      descricao: `Repasse de vendas do aplicativo ${platformToRepasse.nome}`,
-      valor: pending.totalLiquido,
-      bolso: repassePocket,
-    });
+    try {
+      await addTransaction({
+        tipo: "entrada",
+        categoria: "Repasse de Aplicativo",
+        descricao: `Repasse de vendas do aplicativo ${platformToRepasse.nome}`,
+        valor: pending.totalLiquido,
+        bolso: repassePocket,
+      });
 
-    await clearPendingAppSales(platformToRepasse.id);
+      await clearPendingAppSales(platformToRepasse.id);
 
-    toast({
-      title: "Repasse recebido!",
-      description: `O valor de ${formatCurrency(pending.totalLiquido)} do ${platformToRepasse.nome} foi adicionado à sua carteira.`,
-    });
+      toast({
+        title: "Repasse recebido!",
+        description: `O valor de ${formatCurrency(pending.totalLiquido)} do ${platformToRepasse.nome} foi adicionado à sua carteira.`,
+      });
 
-    setIsConfirmingRepasse(false);
-    setPlatformToRepasse(null);
-    setRepassePocket("banco");
+      setIsConfirmingRepasse(false);
+      setPlatformToRepasse(null);
+      setRepassePocket("banco");
+    } catch (error) {
+      toast({
+        title: "Erro ao receber repasse",
+        description: "Houve um erro ao processar o repasse. Tente novamente.",
+        variant: "destructive",
+      });
+    }
   }, [platformToRepasse, vendasPendentesApps, addTransaction, clearPendingAppSales, repassePocket, toast]);
+
+  const handleEditTransaction = (transaction: WalletTransaction) => {
+    setEditingTransaction(transaction);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleSaveEditedTransaction = useCallback(async () => {
+    if (!editingTransaction) return;
+
+    try {
+      await updateTransaction(editingTransaction.id, editingTransaction);
+      toast({
+        title: "Transação atualizada",
+        description: "A transação foi atualizada com sucesso.",
+      });
+      setIsEditDialogOpen(false);
+      setEditingTransaction(null);
+    } catch (error) {
+      toast({
+        title: "Erro ao atualizar transação",
+        description: "Houve um erro ao atualizar a transação. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  }, [editingTransaction, updateTransaction, toast]);
+
+  const handleDeleteTransaction = useCallback(async (transactionId: string) => {
+    try {
+      await deleteTransaction(transactionId);
+      toast({
+        title: "Transação deletada",
+        description: "A transação foi removida da carteira.",
+        variant: "destructive",
+      });
+    } catch (error) {
+      toast({
+        title: "Erro ao deletar transação",
+        description: "Houve um erro ao deletar a transação. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  }, [deleteTransaction, toast]);
 
   return (
     <>
@@ -265,15 +326,50 @@ export function WalletPopup({
                     {walletData?.transacoes.length ? (
                       walletData.transacoes.slice(0, 7).map((transaction) => (
                         <div key={transaction.id} className="flex items-start justify-between gap-3 rounded-xl border p-3">
-                          <div>
+                          <div className="flex-1">
                             <p className="font-medium">{transaction.categoria}</p>
                             <p className="text-xs text-muted-foreground">{transaction.descricao}</p>
                           </div>
-                          <div className="text-right">
-                            <p className={transaction.tipo === "entrada" ? "font-semibold text-emerald-400" : "font-semibold text-rose-400"}>
-                              {transaction.tipo === "entrada" ? "+" : "-"} {formatCurrency(transaction.valor)}
-                            </p>
-                            <p className="text-xs text-muted-foreground">{transaction.bolso === "banco" ? "Banco" : "Caixa"}</p>
+                          <div className="flex items-center gap-2">
+                            <div className="text-right">
+                              <p className={transaction.tipo === "entrada" ? "font-semibold text-emerald-400" : "font-semibold text-rose-400"}>
+                                {transaction.tipo === "entrada" ? "+" : "-"} {formatCurrency(transaction.valor)}
+                              </p>
+                              <p className="text-xs text-muted-foreground">{transaction.bolso === "banco" ? "Banco" : "Caixa"}</p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => handleEditTransaction(transaction)}
+                            >
+                              <Edit className="h-3 w-3" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Deletar Transação</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    Tem certeza que deseja deletar esta transação? Esta ação não pode ser desfeita.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => handleDeleteTransaction(transaction.id)}>
+                                    Deletar
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </div>
                         </div>
                       ))
@@ -369,6 +465,62 @@ export function WalletPopup({
               {flowType === "entrada" ? "Registrar Entrada" : "Registrar Saída"}
             </Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Edição de Transação */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Transação</DialogTitle>
+            <DialogDescription>Atualize os detalhes da transação.</DialogDescription>
+          </DialogHeader>
+          {editingTransaction && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Categoria</Label>
+                <Input
+                  value={editingTransaction.categoria}
+                  onChange={(e) => setEditingTransaction({ ...editingTransaction, categoria: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Descrição</Label>
+                <Input
+                  value={editingTransaction.descricao}
+                  onChange={(e) => setEditingTransaction({ ...editingTransaction, descricao: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Valor (R$)</Label>
+                <Input
+                  value={editingTransaction.valor}
+                  onChange={(e) => setEditingTransaction({ ...editingTransaction, valor: parseFloat(e.target.value) || 0 })}
+                  type="number"
+                  step="0.01"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Bolso</Label>
+                <Select
+                  value={editingTransaction.bolso}
+                  onValueChange={(value) => setEditingTransaction({ ...editingTransaction, bolso: value as WalletPocket })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="banco">Banco</SelectItem>
+                    <SelectItem value="caixa">Caixa</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveEditedTransaction}>Salvar Alterações</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
