@@ -107,6 +107,7 @@ export function ItemEntryDialog({ firestore, stockItems, open, onOpenChange }: I
     }
 
     // Se não houver similares, criar novo produto
+    const normalized = measure ? convertToBaseUnit(rawQuantity, measure) : { quantity: 1, unit: "UN" };
     await salvarNovoOuAtualizar(null, productName, paid, rawQuantity, market, normalized);
   };
 
@@ -209,7 +210,7 @@ export function ItemEntryDialog({ firestore, stockItems, open, onOpenChange }: I
             Registrar Entrada de Item
           </Button>
         </DialogTrigger>
-        <DialogContent>
+        <DialogContent aria-describedby="item-entry-description">
           <DialogHeader>
             <DialogTitle>Registrar Entrada de Item</DialogTitle>
             <DialogDescription>Cadastre uma compra e atualize o estoque usando o checkout de entrada.</DialogDescription>
